@@ -53,9 +53,14 @@ STARTER_MODELS = {
         "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
     },
     "qwen2.5-coder-14b": {
-        "name": "Qwen 2.5 Coder 14B Abliterated (IQ4_XS · 7.56 GB · Alta calidad 14B)",
+        "name": "Qwen 2.5 Coder 14B Abliterated (IQ4_XS · 7.56 GB · Recomendado para apps complejas)",
         "filename": "Qwen2.5-Coder-14B-Instruct-abliterated-IQ4_XS.gguf",
         "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-14B-Instruct-abliterated-GGUF/resolve/main/Qwen2.5-Coder-14B-Instruct-abliterated-IQ4_XS.gguf",
+    },
+    "qwen3-30b-a3b": {
+        "name": "Qwen 3 30B-A3B MoE (Q4_K_M · 18.6 GB · Ideal >=24 GB RAM, 3B activos)",
+        "filename": "Qwen3-30B-A3B-Q4_K_M.gguf",
+        "url": "https://huggingface.co/bartowski/Qwen_Qwen3-30B-A3B-GGUF/resolve/main/Qwen_Qwen3-30B-A3B-Q4_K_M.gguf",
     },
 }
 
@@ -68,13 +73,21 @@ def has_nvidia_gpu() -> bool:
         return False
 
 
-def step_install_requirements():
+def step_install_requirements(skip_playwright: bool = False):
     print("\n=== [1/3] Instalando dependencias Python ===")
     if not REQ_FILE.exists():
         print("[!] No se encontró requirements.txt, omitiendo.")
         return
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(REQ_FILE)])
     print("[OK] Dependencias Python listas.")
+    if not skip_playwright:
+        print("[*] Instalando navegador Chromium Headless para MCP-RUNTIME-VISION (Playwright)...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
+            print("[OK] Playwright Chromium listo para QA visual real.")
+        except Exception as e:
+            print(f"[!] Aviso: No se pudo instalar Chromium de Playwright automáticamente ({e}).")
+            print("    Puedes instalarlo después con: python -m playwright install chromium")
 
 
 def _extract_zip_flat_to_engine(zip_path: Path):
@@ -212,6 +225,7 @@ def main():
     parser.add_argument("--cuda", action="store_true", help="Forzar descarga del motor llama.cpp con CUDA 12.4.")
     parser.add_argument("--model", choices=list(STARTER_MODELS.keys()), default="qwen2.5-coder-7b", help="Modelo GGUF inicial a descargar.")
     parser.add_argument("--no-model", action="store_true", help="No descargar modelo ahora (se puede descargar desde la UI).")
+    parser.add_argument("--no-playwright", action="store_true", help="Omitir instalación de Chromium Headless (Playwright).")
     parser.add_argument("--clean", action="store_true", help="Detiene llama-server y limpia engine/, models/ y cachés para desinstalar.")
     args = parser.parse_args()
 
@@ -224,7 +238,7 @@ def main():
     print("=" * 68)
 
     force_mode = "cpu" if args.cpu else ("cuda" if args.cuda else "auto")
-    step_install_requirements()
+    step_install_requirements(skip_playwright=args.no_playwright)
     step_install_llama_engine(force_mode=force_mode)
     step_install_starter_model(model_key=args.model, skip_model=args.no_model)
 

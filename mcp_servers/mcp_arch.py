@@ -42,28 +42,78 @@ TOOLS = [
 ]
 
 
+def _infer_python_priority(path_low: str, declared_layer: str) -> int:
+    """Infiere la prioridad topológica real (bottom-up) para que models/engines vayan SIEMPRE antes que main.py/server.py."""
+    name = Path(path_low).name
+    if name in ("models.py", "schemas.py", "schema.py", "config.py", "settings.py", "constants.py", "database.py", "db.py"):
+        return 0
+    if any(k in name for k in ("util", "helper", "common", "types")):
+        return 1
+    if any(k in name for k in ("engine", "scanner", "core", "interceptor", "spoof", "worker", "manager")):
+        return 2
+    if any(k in name for k in ("service", "api", "router", "routes", "controller")):
+        return 3
+    if name in ("server.py", "app.py", "main.py", "cli.py", "run.py", "wsgi.py", "asgi.py"):
+        return 5
+    layer_prio = {"models": 0, "core": 2, "service": 3, "api": 4, "entrypoint": 5, "ui": 6}
+    return layer_prio.get(declared_layer.lower(), 2)
+
+
+def _topological_refine(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Refina el orden respetando `imports_from` explícitos (Kahn estable sin ciclos)."""
+    by_path = {str(f.get("path", "")).replace("\\", "/").lstrip("/"): f for f in items}
+    order = [str(f.get("path", "")).replace("\\", "/").lstrip("/") for f in items]
+    indeg = {p: 0 for p in order}
+    adj: Dict[str, List[str]] = {p: [] for p in order}
+
+    for f in items:
+        dst = str(f.get("path", "")).replace("\\", "/").lstrip("/")
+        for dep in (f.get("imports_from") or []):
+            dep_clean = str(dep).replace("\\", "/").lstrip("/")
+            if dep_clean in by_path and dep_clean != dst and dst not in adj[dep_clean]:
+                adj[dep_clean].append(dst)
+                indeg[dst] += 1
+
+    ready = [p for p in order if indeg[p] == 0]
+    result: List[str] = []
+    while ready:
+        cur = ready.pop(0)
+        result.append(cur)
+        for nxt in adj[cur]:
+            indeg[nxt] -= 1
+            if indeg[nxt] == 0:
+                ready.append(nxt)
+    # Si hubo un ciclo, preservar los nodos restantes en el orden base
+    for p in order:
+        if p not in result:
+            result.append(p)
+    return [by_path[p] for p in result]
+
+
 def _build_dag_plan(args: Dict[str, Any]) -> Dict[str, Any]:
     archetype = str(args.get("archetype") or "python_app").lower()
     raw_files: List[Dict[str, Any]] = list(args.get("files") or [])
 
-    layer_prio = {"models": 0, "core": 1, "service": 2, "api": 3, "entrypoint": 4, "ui": 5}
-
     def _sort_key(item: Dict[str, Any]):
-        p = str(item.get("path", "")).lower()
+        p = str(item.get("path", "")).lower().replace("\\", "/")
+        declared = str(item.get("layer", "core"))
         if archetype == "static_web":
             if p.endswith((".html", ".htm")): return (0, p)
             if p.endswith(".css"): return (1, p)
             if p.endswith(".js"): return (2, p)
             return (3, p)
         if archetype == "fullstack_web":
-            if p.endswith(".py"): return (layer_prio.get(str(item.get("layer", "core")).lower(), 2), p)
+            if p.endswith(".py"): return (_infer_python_priority(p, declared), p)
             if p.endswith((".html", ".htm")): return (10, p)
             if p.endswith(".css"): return (11, p)
             if p.endswith(".js"): return (12, p)
             return (13, p)
-        return (layer_prio.get(str(item.get("layer", "core")).lower(), 2), p)
+        if p.endswith(".py"):
+            return (_infer_python_priority(p, declared), p)
+        return (6, p)
 
-    ordered = sorted(raw_files, key=_sort_key)
+    base_ordered = sorted(raw_files, key=_sort_key)
+    ordered = _topological_refine(base_ordered)
     dag_edges = []
     for f in ordered:
         for dep in (f.get("imports_from") or []):

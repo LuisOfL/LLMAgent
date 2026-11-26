@@ -52,6 +52,19 @@ def _fetch_project_assets(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": True, "skipped": True, "reason": "No se detectó solicitud de asset descargable."}
 
     candidates = _find_verified_download_urls(query, target_ext=ext, max_results=4)
+    if not candidates and ext in (".glb", ".gltf"):
+        candidates = [
+            {
+                "title": "Khronos DamagedHelmet.glb",
+                "filename": "DamagedHelmet.glb",
+                "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/glTF-Binary/DamagedHelmet.glb",
+            },
+            {
+                "title": "Khronos ToyCar.glb",
+                "filename": "ToyCar.glb",
+                "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/ToyCar/glTF-Binary/ToyCar.glb",
+            },
+        ]
     if not auto_dl or not candidates:
         return {"success": True, "candidates": candidates, "downloaded": None}
 

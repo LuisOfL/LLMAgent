@@ -531,7 +531,8 @@
                 <input type="password" id="cloud-apikey-input" placeholder="API Key (Opcional en Bedrock con AWS CLI)" style="width: 100%; height: 32px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); padding: 0 10px; font-family: var(--mono); font-size: 11px;">
               </div>
               <div class="field" style="margin-top: 6px;">
-                <input type="text" id="cloud-model-input" placeholder="Modelo (ej: amazon.nova-micro-v1:0)" value="amazon.nova-micro-v1:0" style="width: 100%; height: 32px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); padding: 0 10px; font-family: var(--mono); font-size: 11px;">
+                <select class="vselect" id="cloud-model-input" aria-label="Modelo Nube"></select>
+                <svg class="ico sel-ico" aria-hidden="true"><use href="#i-chevron" /></svg>
               </div>
               <div class="path-line" style="margin-top: 6px;">
                 <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
@@ -901,7 +902,7 @@
   </div>
 
   <script src="/static/splash3d.js?v=3.1"></script>
-  <script src="app.js?v=4.3"></script>
+  <script src="app.js?v=4.4"></script>
 </body>
 
 </html>

@@ -47,7 +47,8 @@ from core.mcp_agent_engine import (
     get_bedrock_converse_tools, run_autonomous_react_pre_step, parse_tool_calls_from_text
 )
 from core.mcp_client import mcp_client_manager
-from core.mcp_orchestrator import run_elite_mcp_pipeline
+from core.mcp_orchestrator import run_elite_mcp_pipeline, run_incremental_iteration, _call_mcp_json
+from core.intent_router import classify_user_intent
 from core.local_codex_engine import (
     classify_agent_intent,
     plan_blueprint_constrained,
@@ -1343,23 +1344,25 @@ def compute_optimal_hardware_profile(model_path: Optional[Path] = None, has_mmpr
                 # Modelos 12B–14B IQ4_XS (~6.8–7.6 GB): ~24 capas en RTX 4050 + resto en RAM
                 ngl = 18 if has_mmproj else 24
                 batch_size, ubatch_size = 1024, 512
-                ctx_opt = 8192
+                ctx_opt = 16384
+                cache_k, cache_v = "q4_0", "q4_0"
             else:
-                # Modelos 14B Q4_K_M / >8 GB: dejar margen seguro de VRAM
+                # Modelos 14B Q4_K_M / >8 GB: dejar margen seguro de VRAM con KV q4_0 + 16k ctx
                 ngl = 14 if has_mmproj else 19
                 batch_size, ubatch_size = 512, 256
-                ctx_opt = 8192
+                ctx_opt = 16384
+                cache_k, cache_v = "q4_0", "q4_0"
         elif effective_vram >= 3500.0:
-            # GPUs de 4 GB
+            # GPUs de 4 GB con KV q4_0 + FlashAttention
             ngl = 14 if has_mmproj else 18
             cache_k, cache_v = "q4_0", "q4_0"
             batch_size, ubatch_size = 512, 256
-            ctx_opt = 8192
+            ctx_opt = 16384
         else:
             ngl = 6
             cache_k, cache_v = "q4_0", "q4_0"
             batch_size, ubatch_size = 512, 256
-            ctx_opt = 8192
+            ctx_opt = 16384
 
         return {
             "mode": "GPU+CUDA (MoE Offload)" if is_moe else "GPU+CUDA",
@@ -1437,8 +1440,14 @@ def _auto_load_default_model():
         catalog = list_models()
         models = catalog.get("models", [])
         if models:
-            # Preferir automáticamente un modelo rápido IQ4_XS / <= 4.5 GB (100% VRAM) si existe
-            preferred = next((x for x in models if "iq4_xs" in x["name"].lower() or x.get("size_gb", 99) <= 4.5), models[0])
+            # Priorizar modelos de código de mayor capacidad (14B/32B/MoE Coder -> 7B Coder -> fallback)
+            preferred = (
+                next((x for x in models if "coder" in x["name"].lower() and any(s in x["name"].lower() for s in ("14b", "32b", "30b"))), None)
+                or next((x for x in models if "coder" in x["name"].lower()), None)
+                or next((x for x in models if any(s in x["name"].lower() for s in ("14b", "30b", "32b"))), None)
+                or next((x for x in models if "iq4_xs" in x["name"].lower() or x.get("size_gb", 99) <= 4.5), None)
+                or models[0]
+            )
             load_model(LoadModelRequest(
                 model_path=preferred["path"],
                 mmproj_path=None,
@@ -1446,8 +1455,8 @@ def _auto_load_default_model():
                 ctx_size=16384,
                 threads=None,
                 flash_attn=True,
-                cache_type_k=None,
-                cache_type_v=None,
+                cache_type_k="q4_0",
+                cache_type_v="q4_0",
             ))
     except Exception:
         pass
@@ -2648,12 +2657,14 @@ async def chat_proxy(chat_req: ChatCompletionRequest):
     cloud_cfg = load_cloud_config()
     should_use_cloud = chat_req.cloud_workers if (chat_req.cloud_workers is not None) else cloud_cfg.get("enabled", False)
 
-    agent_intent = "react_agent"
+    agent_intent = "answer_question"
+    intent_info = {"intent": "answer_question", "label": "4) Responder Pregunta (LLM Directo)", "reason": ""}
     is_coding_task = False
     if last_user_text and chat_req.mode == "agent":
-        agent_intent = classify_agent_intent(last_user_text, workspace.current_dir, active_file=active_p)
-        is_coding_task = (agent_intent == "build_app")
-        print(f"[CodexRouter] Intención detectada en modo Agente: {agent_intent}")
+        intent_info = classify_user_intent(last_user_text, workspace.current_dir, active_file=active_p)
+        agent_intent = intent_info["intent"]
+        is_coding_task = agent_intent in ("create_app", "iterate_app")
+        print(f"[IntentRouter] {intent_info['label']} ({intent_info['reason']})")
 
     if should_use_cloud:
         provider = cloud_cfg.get("provider", "bedrock")
@@ -2845,6 +2856,90 @@ async def chat_proxy(chat_req: ChatCompletionRequest):
             if web_query_used:
                 yield f"data: {json.dumps({'type': 'web_search_event', 'query': web_query_used})}\n\n"
 
+            # Emitir paso de clasificación de intención en modo Agente
+            if is_agent and last_user_text:
+                intent_title = f"Clasificador de Intención: {intent_info['label']}"
+                yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'intent_router', 'status': 'done', 'title': intent_title, 'detail': intent_info.get('reason', '')})}\n\n"
+
+            # =========================================================================
+            # RUTA 2: DESCARGAR ARCHIVO DE INTERNET (MCP-ASSETS / download_url directo)
+            # =========================================================================
+            if is_agent and agent_intent == "download_asset" and last_user_text:
+                yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'dl_mcp', 'status': 'running', 'title': '[MCP-ASSETS] Buscando y descargando archivo público al repositorio...', 'detail': last_user_text[:120]})}\n\n"
+                url_in_q = re.findall(r"(https?://[^\s<>\"'`]+)", last_user_text, re.IGNORECASE)
+                if url_in_q:
+                    dl_res = mcp_server.execute_tool("download_url", {"url": url_in_q[0]}, workspace.current_dir)
+                    dl_ok = bool(dl_res.get("success"))
+                    dl_info = dl_res if dl_ok else None
+                    err_msg = dl_res.get("error", "Error desconocido")
+                else:
+                    mcp_dl = _call_mcp_json("mcp__mcp_assets__fetch_project_assets", {
+                        "workspace_dir": str(workspace.current_dir.resolve()),
+                        "query": last_user_text,
+                        "auto_download": True
+                    })
+                    dl_info = mcp_dl.get("downloaded")
+                    dl_ok = bool(dl_info)
+                    err_msg = mcp_dl.get("error") or mcp_dl.get("reason") or "No se encontró un enlace público directo descargable sin inicio de sesión."
+
+                if dl_ok and dl_info:
+                    fname = dl_info.get("filename", "archivo")
+                    sz = dl_info.get("size_bytes", 0)
+                    src_u = dl_info.get("source_url", "")
+                    yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'dl_mcp', 'status': 'done', 'title': f'[MCP-ASSETS] Descargado: {fname} ({round(sz/1024, 1)} KB)', 'detail': src_u})}\n\n"
+                    yield f"data: {json.dumps({'type': 'mcp_tool_event', 'tools': [{'tool': 'download_url', 'summary': f'Descargado {fname}'}], 'workspace_changed': True})}\n\n"
+                    msg = f"Archivo **`{fname}`** descargado y guardado correctamente en tu repositorio.\n\n- **Tamaño:** `{sz:,} bytes`\n- **Fuente verificada:** {src_u}\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'dl_mcp', 'status': 'done', 'title': '[MCP-ASSETS] No se pudo descargar el archivo', 'detail': str(err_msg)[:140]})}\n\n"
+                    msg = f"No se pudo descargar el archivo solicitado: **{err_msg}**\n\nNo se guardó ningún archivo en tu repositorio."
+
+                for chunk in _chunk_text(msg, 120):
+                    yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk}}]})}\n\n"
+                yield f"data: {json.dumps({'type': 'meta', 'tokens': 40, 'total_time_s': round(max(time.time()-start_t, 0.01), 2), 'tokens_per_sec': 60, 'ttft_ms': 80, 'finish_reason': 'stop'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            # =========================================================================
+            # RUTA 3: COMPILAR / VERIFICAR / EJECUTAR (MCP-EXEC + MCP-RUNTIME-VISION)
+            # =========================================================================
+            if is_agent and agent_intent == "compile_run" and last_user_text:
+                yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'exec_mcp', 'status': 'running', 'title': '[MCP-EXEC] Compilando y auditando archivos del repositorio...', 'detail': str(workspace.current_dir)})}\n\n"
+                ws_files = []
+                for ext_pat in ("*.py", "*.js", "*.html", "*.htm", "*.css"):
+                    for p in workspace.current_dir.rglob(ext_pat):
+                        if any(ign in p.parts for ign in (".git", "__pycache__", "node_modules", ".venv", ".antigravity_rag", "engine", "models")):
+                            continue
+                        ws_files.append(str(p.relative_to(workspace.current_dir)).replace("\\", "/"))
+                qa_res = _call_mcp_json("mcp__mcp_exec__run_static_qa", {"workspace_dir": str(workspace.current_dir.resolve()), "file_paths": ws_files[:40]})
+                py_main = next((f for f in ws_files if Path(f).name.lower() == "main.py"), None)
+                run_res = _call_mcp_json("mcp__mcp_exec__run_sandbox_exec", {"workspace_dir": str(workspace.current_dir.resolve()), "entrypoint": py_main}) if py_main else {"success": True, "skipped": True}
+                html_main = next((f for f in ws_files if Path(f).name.lower() == "index.html"), None)
+                vis_res = _call_mcp_json("mcp__mcp_runtime_vision__verify_web_runtime", {"workspace_dir": str(workspace.current_dir.resolve()), "html_file": html_main}) if html_main else {"success": True, "skipped": True}
+
+                errs = qa_res.get("errors") or []
+                if not run_res.get("success"):
+                    errs.append({"file": py_main, "gate": "SANDBOX_EXEC", "error": run_res.get("stacktrace", "Error de ejecución")})
+                if not vis_res.get("success"):
+                    for iss in (vis_res.get("issues") or []):
+                        errs.append({"file": html_main, "gate": "RUNTIME_VISION", "error": iss})
+
+                status_txt = "0 errores detectados" if not errs else f"{len(errs)} error(es) encontrado(s)"
+                yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'exec_mcp', 'status': 'done', 'title': f'[MCP-EXEC] Compilación y QA finalizados ({status_txt})', 'detail': f'{len(ws_files)} archivo(s) inspeccionado(s)'})}\n\n"
+
+                if not errs:
+                    out_msg = f"Compilación y verificación completadas con **0 errores** ({len(ws_files)} archivos revisados).\n"
+                    if run_res.get("stdout"):
+                        out_msg += f"\n**Salida de `{py_main}`:**\n```text\n{run_res['stdout']}\n```\n"
+                else:
+                    err_lines = "\n".join(f"- **`{e.get('file')}`** `[{e.get('gate')}]`: {e.get('error')}" for e in errs[:10])
+                    out_msg = f"Se detectaron **{len(errs)} problema(s)** al compilar/verificar:\n\n{err_lines}\n"
+
+                for chunk in _chunk_text(out_msg, 120):
+                    yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk}}]})}\n\n"
+                yield f"data: {json.dumps({'type': 'meta', 'tokens': 50, 'total_time_s': round(max(time.time()-start_t, 0.01), 2), 'tokens_per_sec': 60, 'ttft_ms': 80, 'finish_reason': 'stop'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
             # =========================================================================
             # PETICIÓN DIRECTA DE EJECUCIÓN EN TERMINAL / APERTURA DE APP
             # =========================================================================
@@ -2894,15 +2989,31 @@ async def chat_proxy(chat_req: ChatCompletionRequest):
             # =========================================================================
             if (orchestrate_cloud or orchestrate_local) and last_user_text:
                 final_files: List[str] = []
-                for ev in run_elite_mcp_pipeline(
-                    user_query=last_user_text,
-                    workspace_dir=workspace.current_dir,
-                    cloud_cfg=cloud_cfg,
-                    use_cloud=orchestrate_cloud,
-                    local_port=state.port,
-                    max_qa_rounds=3,
-                    is_aborted=lambda: state.abort_requested,
-                ):
+                ctx_budget = max(16384, int(state.ctx_size or 16384))
+                if agent_intent == "iterate_app":
+                    pipeline_stream = run_incremental_iteration(
+                        user_query=last_user_text,
+                        workspace_dir=workspace.current_dir,
+                        cloud_cfg=cloud_cfg,
+                        use_cloud=orchestrate_cloud,
+                        local_port=state.port,
+                        active_file=active_p,
+                        context_tokens=ctx_budget,
+                        is_aborted=lambda: state.abort_requested,
+                    )
+                else:
+                    pipeline_stream = run_elite_mcp_pipeline(
+                        user_query=last_user_text,
+                        workspace_dir=workspace.current_dir,
+                        cloud_cfg=cloud_cfg,
+                        use_cloud=orchestrate_cloud,
+                        local_port=state.port,
+                        max_qa_rounds=3,
+                        context_tokens=ctx_budget,
+                        enable_runtime_vision=False,
+                        is_aborted=lambda: state.abort_requested,
+                    )
+                for ev in pipeline_stream:
                     if state.abort_requested:
                         break
                     ev_type = ev.get("type")

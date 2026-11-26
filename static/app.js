@@ -1592,12 +1592,66 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  const CLOUD_MODEL_PRESETS = {
+    bedrock: [
+      { id: "amazon.nova-pro-v1:0", label: "Amazon Nova Pro (Recomendado · Apps/Código)" },
+      { id: "us.anthropic.claude-3-5-sonnet-20241022-v2:0", label: "Claude 3.5 Sonnet v2 (Máxima calidad)" },
+      { id: "amazon.nova-lite-v1:0", label: "Amazon Nova Lite (Balanceado)" },
+      { id: "amazon.nova-micro-v1:0", label: "Amazon Nova Micro (Ultra económico)" },
+    ],
+    gemini: [
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Recomendado · Rápido y potente)" },
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Máxima calidad de código)" },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (Económico)" },
+      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Clásico)" },
+    ],
+    openrouter: [
+      { id: "deepseek/deepseek-r1", label: "DeepSeek R1 (Razonamiento y código)" },
+      { id: "qwen/qwen-2.5-coder-32b-instruct", label: "Qwen 2.5 Coder 32B (Especialista código)" },
+      { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B Instruct" },
+      { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (vía OpenRouter)" },
+    ],
+  };
+
+  function populateCloudModelOptions(provider, desiredModel = "") {
+    if (!cloudModelInput) return;
+    const prov = CLOUD_MODEL_PRESETS[provider] ? provider : "bedrock";
+    const list = CLOUD_MODEL_PRESETS[prov];
+    cloudModelInput.innerHTML = "";
+    list.forEach(item => {
+      const opt = document.createElement("option");
+      opt.value = item.id;
+      opt.textContent = item.label;
+      cloudModelInput.appendChild(opt);
+    });
+    if (desiredModel) {
+      const exists = list.some(item => item.id === desiredModel);
+      if (!exists) {
+        const customOpt = document.createElement("option");
+        customOpt.value = desiredModel;
+        customOpt.textContent = `${desiredModel} (Actual)`;
+        cloudModelInput.appendChild(customOpt);
+      }
+      cloudModelInput.value = desiredModel;
+    } else {
+      cloudModelInput.value = list[0].id;
+    }
+  }
+
+  if (cloudProviderSelect) {
+    cloudProviderSelect.addEventListener("change", () => {
+      populateCloudModelOptions(cloudProviderSelect.value, "");
+    });
+    populateCloudModelOptions(cloudProviderSelect.value || "bedrock", "");
+  }
+
   function updateCloudUi(cfg) {
     if (cfg && cfg.has_api_key !== undefined) hasCloudApiKey = !!cfg.has_api_key;
     if (chkCloudEnabled) chkCloudEnabled.checked = isCloudWorkersEnabled;
     if (cloudProviderSelect && cfg && cfg.provider) cloudProviderSelect.value = cfg.provider;
     if (cloudApiKeyInput && cfg && cfg.api_key_masked) cloudApiKeyInput.placeholder = cfg.api_key_masked;
-    if (cloudModelInput && cfg && cfg.model) cloudModelInput.value = cfg.model;
+    const activeProv = cloudProviderSelect ? cloudProviderSelect.value : (cfg && cfg.provider ? cfg.provider : "bedrock");
+    populateCloudModelOptions(activeProv, cfg && cfg.model ? cfg.model : "");
 
     if (btnToggleWorkers) {
       btnToggleWorkers.classList.toggle("off", !isCloudWorkersEnabled);

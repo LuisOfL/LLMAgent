@@ -76,18 +76,77 @@ def _verify_web_runtime(args: Dict[str, Any]) -> Dict[str, Any]:
                     page.on("response", lambda r: failed_reqs.append(f"{r.status} {r.url}") if r.status >= 400 else None)
                     page.goto(base_url, wait_until="domcontentloaded", timeout=10000)
                     page.wait_for_timeout(600)
+
+                    # 1a. Inspección estructural de geometría DOM (getBoundingClientRect) — "ojos" en texto para Qwen 8B
+                    geom = page.evaluate("""() => {
+                        const vw = window.innerWidth, vh = window.innerHeight;
+                        const sels = ['canvas', 'button', 'input', 'main', 'header'];
+                        const report = [];
+                        const geomErrors = [];
+                        for (const sel of sels) {
+                            const els = Array.from(document.querySelectorAll(sel)).slice(0, 6);
+                            for (const el of els) {
+                                const r = el.getBoundingClientRect();
+                                const id = el.id ? '#' + el.id : '';
+                                const w = Math.round(r.width), h = Math.round(r.height);
+                                const offscreen = (r.right < 0 || r.left > vw || r.bottom < 0);
+                                report.push(`${sel}${id}: ${w}x${h}px at (${Math.round(r.left)},${Math.round(r.top)})`);
+                                if (sel === 'canvas' && (w === 0 || h === 0)) {
+                                    geomErrors.push(`canvas${id}: tamaño 0x0px (no visible)`);
+                                } else if (sel === 'button' && offscreen) {
+                                    geomErrors.push(`button${id}: fuera de viewport`);
+                                }
+                            }
+                        }
+                        return { report, geomErrors };
+                    }""")
+
+                    # 1b. Smoke Testing interactivo: clicks en botones, inputs y teclas de juego/navegación
+                    try:
+                        btns = page.locator("button:visible")
+                        for i in range(min(btns.count(), 4)):
+                            btns.nth(i).click(timeout=1200)
+                        inputs = page.locator("input:visible")
+                        for i in range(min(inputs.count(), 2)):
+                            itype = inputs.nth(i).get_attribute("type") or "text"
+                            if itype in ("text", "search", "number"):
+                                inputs.nth(i).fill("42" if itype == "number" else "test", timeout=1000)
+                        for key in ("ArrowUp", "ArrowRight", "Space"):
+                            page.keyboard.press(key)
+                        page.wait_for_timeout(500)
+                    except Exception:
+                        pass
+
                     body_len = len((page.inner_text("body") or "").strip())
+                    # 1c. Verificar si existe <canvas> visible pero totalmente negro/vacío (ej. sin loop de render Three.js)
+                    try:
+                        canvas_loc = page.locator("canvas:visible").first
+                        if canvas_loc.count() > 0:
+                            box = canvas_loc.bounding_box()
+                            if box and box.get("width", 0) >= 20 and box.get("height", 0) >= 20:
+                                has_webgl_or_2d = page.evaluate("""() => {
+                                    const c = document.querySelector('canvas');
+                                    if (!c) return true;
+                                    return (c.width > 0 && c.height > 0);
+                                }""")
+                                if not has_webgl_or_2d:
+                                    geom["geomErrors"].append("canvas: buffer interno 0x0 (no inicializado por Three.js/Canvas2D)")
+                    except Exception:
+                        pass
                     browser.close()
-                issues = page_errors + console_errors + failed_reqs
+                issues = page_errors + console_errors + failed_reqs + (geom.get("geomErrors") or [])
                 return {
                     "success": len(issues) == 0,
-                    "engine": "playwright_chromium",
+                    "engine": "playwright_chromium_interactive",
                     "url": base_url,
                     "body_chars": body_len,
-                    "issues": issues[:8],
+                    "geometry_summary": geom.get("report", [])[:15],
+                    "issues": issues[:10],
                 }
-            except Exception:
-                pass
+            except Exception as pw_err:
+                playwright_hint = f"Playwright no disponible ({type(pw_err).__name__}). Instala con: pip install playwright && python -m playwright install chromium"
+        else:
+            playwright_hint = ""
 
         # 2. Fallback ligero sin Playwright: HTTP GET real (o verificación directa en disco si un firewall bloquea sockets)
         issues: List[str] = []
@@ -128,6 +187,7 @@ def _verify_web_runtime(args: Dict[str, Any]) -> Dict[str, Any]:
             "url": base_url or str(html_fp),
             "checked_local_assets": checked_refs,
             "issues": issues[:8],
+            "hint": playwright_hint,
         }
     finally:
         if httpd:

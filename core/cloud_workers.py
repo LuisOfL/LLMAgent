@@ -226,34 +226,46 @@ def extract_pure_code_from_llm(raw_resp: str, file_path: str) -> str:
     text = re.sub(r"<think>[\s\S]*?</think>", "", raw_resp, flags=re.IGNORECASE)
     text = re.sub(r"<think>[\s\S]*$", "", text, flags=re.IGNORECASE).strip()
 
-    # Si hay bloques con ``` al inicio de línea, tomar desde la primera apertura hasta el último cierre
+    # Si hay bloques con ``` (al inicio de línea o tras texto introductorio), extraer limpiamente sin fugas de ```html / ```js
     lines = text.splitlines()
     open_idx = -1
     close_idx = -1
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith("```"):
-            if open_idx == -1:
+        if open_idx == -1:
+            if stripped.startswith("```") or re.search(r"```(?:file:[^\s]+|[a-zA-Z0-9_+\-]+)?\s*$", stripped):
                 open_idx = i
-            else:
-                close_idx = i
+        elif stripped.startswith("```"):
+            close_idx = i
 
     if open_idx != -1:
         if close_idx != -1 and close_idx > open_idx:
             code_lines = lines[open_idx + 1 : close_idx]
         else:
             code_lines = lines[open_idx + 1 :]
-        # Filtrar cualquier línea interna que sea un marcador ```file:... o ```python suelto
+        # Filtrar cualquier línea que sea un marcador ```file:... o ```lang suelto
         cleaned_lines = []
         for cl in code_lines:
             s_cl = cl.strip()
-            if s_cl.startswith("```file:") or s_cl in ("```", "```python", "```py", "```html", "```js", "```javascript", "```css"):
+            if re.match(r"^```[a-zA-Z0-9_.:/\-]*\s*$", s_cl):
                 continue
-            # Si una línea contiene "```file:" pegado al texto (eco del prompt), truncar esa parte
             if "```file:" in cl:
                 cl = cl.split("```file:")[0]
             cleaned_lines.append(cl)
         text = "\n".join(cleaned_lines).strip()
+    else:
+        # Caso inline: el LLM escribió ```html<!DOCTYPE html> o similar
+        m_inline = re.search(r"```(?:file:[^\s]+|[a-zA-Z0-9_+\-]+)?\s*\n([\s\S]+?)(?:\n```|$)", text)
+        if m_inline:
+            text = m_inline.group(1).strip()
+
+    # Limpieza defensiva final de cualquier marca Markdown residual al inicio o final (ej. ```html pegado a <!DOCTYPE>)
+    text = re.sub(r"^\s*```(?:file:[^\s]+|[a-zA-Z0-9_+\-]+)?[ \t]*\r?\n?", "", text)
+    text = re.sub(r"\r?\n?[ \t]*```\s*$", "", text).strip()
+    if file_path.lower().endswith((".html", ".htm")):
+        m_html = re.search(r"(<!DOCTYPE\s+html|<html\b)", text, re.IGNORECASE)
+        if m_html and m_html.start() > 0 and ("```" in text[:m_html.start()] or len(text[:m_html.start()].strip()) < 80):
+            text = text[m_html.start():].strip()
 
     # En archivos Python, detectar si el modelo copió el prompt ("Instrucciones del código:" / "REGLAS OBLIGATORIAS:")
     # dentro de un docstring inicial o comentario sin cerrar.
@@ -1053,6 +1065,7 @@ def build_bedrock_worker_prompt(
             "- Estética moderna y limpia: fondo oscuro elegante (`bg-[#0a0c10] text-slate-100`), navbar flexbox estilizada (`border-b border-white/10`), tarjetas limpias (`bg-white/5 border border-white/10 rounded-xl p-6`), botones con hover suave.\n"
             "- PROHIBIDO dejar enlaces azules subrayados por defecto, tipografía Times New Roman o patrones `radial-gradient` repetidos detrás del texto.\n"
             "- Si hay un visor 3D / `<canvas>`, dale altura explícita (`min-height: 62vh; width: 100%`), iluminación fuerte (`AmbientLight` + `DirectionalLight` + `HemisphereLight`) y cámara centrada.\n"
+            "- Si defines una `class` en JS (ej. `class App`), DEBES instanciarla (`window.addEventListener('DOMContentLoaded', () => new App());`) y en Three.js incluir SIEMPRE un bucle `requestAnimationFrame` que llame a `renderer.render(scene, camera)`.\n"
             "- Respeta EXACTAMENTE los `id`, `class`, nombres de archivo y rutas `/api/...` definidos en los contratos hermanos. Cero placeholders ni TODOs."
         )
     else:
@@ -1114,7 +1127,7 @@ def generate_file_with_local_orchestrator(
             "REGLAS ESTRICTAS DE DISEÑO Y COHERENCIA:\n"
             "1. Si es `.html`, incluye `<script src=\"https://cdn.tailwindcss.com\"></script>` y fuente `Inter` de Google Fonts. Usa un diseño oscuro limpio (`bg-[#0a0c10] text-slate-100`), navbar flexbox moderna, tarjetas `bg-white/5 border border-white/10 rounded-xl` y botones estilizados.\n"
             "2. PROHIBIDO enlaces azules sin estilo, Times New Roman, fondos con patrones `radial-gradient` ruidosos sobre texto, `// TODO` o placeholders.\n"
-            "3. Si incluye 3D / `<canvas>`, dale dimensiones explícitas (`min-height: 62vh; width: 100%`), buena iluminación (`HemisphereLight` + `DirectionalLight`) y controles interactivos reales.\n"
+            "3. Si incluye 3D / `<canvas>`, dale dimensiones explícitas (`min-height: 62vh; width: 100%`), buena iluminación (`HemisphereLight` + `DirectionalLight`), controles interactivos reales, instancia SIEMPRE tu clase principal (`new App()`) y agrega bucle `requestAnimationFrame` llamando a `renderer.render(scene, camera)`.\n"
             "4. Respeta EXACTAMENTE cada `id`, `class`, nombre de script/estilo y ruta `/api/...` de los contratos hermanos.\n"
             "5. Devuelve ÚNICAMENTE el código fuente del archivo, sin explicaciones ni texto fuera del código."
         )
@@ -1142,7 +1155,7 @@ def generate_file_with_local_orchestrator(
         "Entrega únicamente el código fuente completo de principio a fin, sin placeholders ni funciones incompletas."
     )
 
-    code = _query_local_qwen_fast(system_prompt, user_msg, local_port=local_port, max_tokens=4096)
+    code = _query_local_qwen_fast(system_prompt, user_msg, local_port=local_port, max_tokens=8192)
     if code and len(code.strip()) > 15:
         return True, code
     return False, ""
@@ -1173,9 +1186,9 @@ def _heal_code_with_local_qwen(
         f"{issues_report}\n"
         f"{ctx_note}\n"
         f"CÓDIGO A REPARAR Y COMPLETAR:\n{broken_code}\n\n"
-        "Reescribe y devuelve ÚNICAMENTE el código fuente completo de '{path}' con todos los errores corregidos y todas las funciones 100% implementadas."
+        f"Reescribe y devuelve ÚNICAMENTE el código fuente completo de '{path}' con todos los errores corregidos y todas las funciones 100% implementadas."
     )
-    return _query_local_qwen_fast(system_prompt, user_msg, local_port=local_port, max_tokens=4096)
+    return _query_local_qwen_fast(system_prompt, user_msg, local_port=local_port, max_tokens=8192)
 
 
 def _smoke_test_python_code(code_text: str, rel_path: str, workspace_dir: Optional[Path]) -> Optional[str]:

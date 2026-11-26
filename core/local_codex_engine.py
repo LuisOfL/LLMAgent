@@ -253,10 +253,12 @@ def detect_app_archetype(user_query: str, workspace_dir: Optional[Path] = None) 
 
     needs_backend = any(k in q_low for k in (
         "fastapi", "flask", "django", "backend", "api rest", "base de datos", "sqlite",
-        "servidor python", "full stack", "fullstack", "autenticacion", "autenticación", "login con servidor"
+        "servidor python", "full stack", "fullstack", "autenticacion", "autenticación", "login con servidor",
+        "man in the middle", "mitm", "dns spoof", "arp", "sniffer", "sniff", "intercept",
+        "dispositivos conectados", "escaneo de red", "escanear red", "misma red", "paquetes", "scapy", "socket"
     ))
     wants_web = any(k in q_low for k in (
-        "web", "interfaz", "pagina", "página", "html", "css", "javascript", "dashboard", "panel",
+        "web", "interfaz", "interfz", "pagina", "página", "html", "index.html", "css", "javascript", "dashboard", "panel",
         "frontend", "sitio", "landing", "portafolio", "tienda", "kanban", "calculadora",
         "snake", "tetris", "juego", "lista de tareas", "todo", "visor 3d", "three.js", "threejs", "glb", "gltf"
     ))
@@ -355,10 +357,11 @@ def plan_blueprint_constrained(
         )
     elif archetype == "fullstack_web":
         arch_rules = (
-            "ARQUETIPO: APLICACIÓN WEB FULL-STACK (Python + HTML/CSS/JS).\n"
-            "1. Genera entre 2 y 4 archivos cohesivos: `server.py` (usando `http.server` o FastAPI que sirva `/` -> `index.html` y endpoints `/api/*`), `index.html`, y opcionalmente `style.css` / `app.js`.\n"
-            "2. Asegúrate de que cada `fetch('/api/...')` en el frontend coincida 100% con una ruta real en `server.py`.\n"
-            "3. `server.py` debe poder ejecutarse directamente con `python server.py` sin argumentos obligatorios.\n"
+            "ARQUETIPO: APLICACIÓN WEB FULL-STACK (Backend Python + Frontend `index.html`).\n"
+            "1. Genera entre 2 y 4 archivos cohesivos: módulos de lógica/modelos (si aplica), `server.py` (FastAPI o `http.server` que sirva `/` -> `index.html` y endpoints `/api/*`), `index.html`, y opcionalmente `app.js`.\n"
+            "2. PROHIBIDO usar Tkinter/PyQt/CLI en lugar de interfaz web: SIEMPRE debes incluir `index.html` con UI moderna conectada por `fetch('/api/...')`.\n"
+            "3. Asegúrate de que cada `fetch('/api/...')` en el frontend coincida 100% con una ruta real en `server.py`, y NO dupliques clases entre archivos Python (impórtalas).\n"
+            "4. `server.py` debe poder ejecutarse directamente con `python server.py` sin argumentos obligatorios.\n"
             f"{glb_hint}"
         )
     else:
@@ -386,6 +389,17 @@ def plan_blueprint_constrained(
             web_only = [f for f in raw_files if str(f.get("path", "")).lower().endswith((".html", ".htm", ".css", ".js", ".json"))]
             if web_only:
                 raw_files = web_only
+        # En fullstack_web, garantizar que SIEMPRE exista index.html si el LLM lo omitió
+        if archetype == "fullstack_web":
+            has_html_node = any(str(f.get("path", "")).lower().endswith((".html", ".htm")) for f in raw_files)
+            if not has_html_node:
+                raw_files.append({
+                    "path": "index.html",
+                    "layer": "ui",
+                    "description": "Interfaz web moderna conectada al backend Python mediante fetch('/api/...')",
+                    "exports": ["index.html"],
+                    "imports_from": [str(f.get("path", "")) for f in raw_files if str(f.get("path", "")).lower().endswith(".py")][:2],
+                })
         # Ordenar topológicamente según arquetipo:
         # - En web estática: index.html PRIMERO (define IDs/clases), luego CSS, luego JS
         # - En full-stack: backend Python primero (define rutas /api/*), luego index.html, luego CSS, luego JS

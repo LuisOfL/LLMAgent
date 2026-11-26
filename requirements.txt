@@ -23,3 +23,6 @@ PySocks>=1.7.1
 # 5. Exportación de Documentos (PDF y Word)
 reportlab>=4.0.0
 python-docx>=1.1.0
+
+# 6. Verificación Visual Headless (MCP-RUNTIME-VISION)
+playwright>=1.45.0

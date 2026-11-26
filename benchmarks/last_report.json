@@ -1,0 +1,150 @@
+{
+  "mode": "dry-run",
+  "timestamp": "2026-11-26T05:50:49Z",
+  "total_cases": 20,
+  "intent_accuracy_pct": 100.0,
+  "deterministic_qa_pass_pct": 100.0,
+  "elapsed_s": 0.275,
+  "results": [
+    {
+      "id": "01_todo_spa",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "02_calculator",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "03_kanban_board",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "04_threejs_viewer",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "05_pomodoro_timer",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "06_expense_tracker",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "07_markdown_editor",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "08_quiz_app",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "09_snake_game",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "10_notes_app",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "11_unit_converter",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "12_drawing_canvas",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "13_password_generator",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "14_weather_dashboard",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "15_fastapi_notes_api",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "16_python_csv_analyzer",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "17_fullstack_tasks",
+      "expected_intent": "create_app",
+      "actual_intent": "create_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "18_iterate_add_3d_model",
+      "expected_intent": "iterate_app",
+      "actual_intent": "iterate_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "19_iterate_change_theme",
+      "expected_intent": "iterate_app",
+      "actual_intent": "iterate_app",
+      "intent_ok": true,
+      "qa_ok": true
+    },
+    {
+      "id": "20_iterate_fix_form_bug",
+      "expected_intent": "iterate_app",
+      "actual_intent": "iterate_app",
+      "intent_ok": true,
+      "qa_ok": true
+    }
+  ]
+}

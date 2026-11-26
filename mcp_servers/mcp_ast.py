@@ -151,6 +151,35 @@ def _read_symbol(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"success": True, "file_path": rel, "symbol": sym, "source": src[start_idx : start_idx + 2200]}
 
 
+_PLACEHOLDER_PATTERNS = [
+    (r"//\s*\.\.\.", "elipsis '// ...'"),
+    (r"//\s*(?:rest of|resto del c[oó]digo|c[oó]digo restante|implementaci[oó]n aqu[ií]|todo\b|fixme\b)", "comentario placeholder/TODO en JS/CSS"),
+    (r"/\*\s*\.\.\.\s*\*/", "elipsis '/* ... */'"),
+    (r"#\s*(?:\.\.\.|rest of|resto del c[oó]digo|todo\b|fixme\b|placeholder)", "comentario placeholder/TODO en Python"),
+    (r"\braise\s+NotImplementedError\b", "NotImplementedError sin implementar"),
+]
+
+
+def _detect_truncation_or_placeholders(content: str, suffix: str) -> str:
+    """Detecta código truncado o placeholders para rechazar la escritura inmediatamente."""
+    for pat, label in _PLACEHOLDER_PATTERNS:
+        if re.search(pat, content, re.IGNORECASE):
+            return f"No se permiten elipsis ni código truncado ({label}). Escribe la implementación completa."
+    if suffix == ".py":
+        try:
+            tree = ast.parse(content)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    body = [n for n in node.body if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str))]
+                    if len(body) == 1:
+                        only = body[0]
+                        if isinstance(only, ast.Pass) or (isinstance(only, ast.Expr) and isinstance(only.value, ast.Constant) and only.value.value is Ellipsis):
+                            return f"La función `{node.name}` contiene un cuerpo vacío (`pass`/`...`). Escribe la implementación completa."
+        except SyntaxError:
+            pass
+    return ""
+
+
 def _patch_symbol(args: Dict[str, Any]) -> Dict[str, Any]:
     ws = Path(str(args.get("workspace_dir", "."))).resolve()
     rel = str(args.get("file_path", ""))
@@ -161,6 +190,10 @@ def _patch_symbol(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": f"Archivo no encontrado: {rel}"}
     if target.suffix.lower() != ".py":
         return {"success": False, "error": "patch_symbol AST soporta archivos .py; usa write_module para HTML/CSS/JS."}
+
+    trunc_err = _detect_truncation_or_placeholders(new_src, ".py")
+    if trunc_err:
+        return {"success": False, "error": f"Error: {trunc_err}"}
 
     old_src = target.read_text(encoding="utf-8", errors="replace")
     tree = ast.parse(old_src)
@@ -181,11 +214,31 @@ def _patch_symbol(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"success": True, "file_path": rel, "symbol": sym, "lines_replaced": end - start, "refresh_workspace": True}
 
 
+def _strip_markdown_fences(content: str, suffix: str) -> str:
+    """Elimina cualquier marca Markdown (```html, ```js, ```) o <think> que pudiera filtrarse antes de guardar."""
+    if not content:
+        return content
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", content, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^\s*```(?:file:[^\s]+|[a-zA-Z0-9_+\-]+)?[ \t]*\r?\n?", "", cleaned)
+    cleaned = re.sub(r"\r?\n?[ \t]*```\s*$", "", cleaned)
+    if suffix in (".html", ".htm"):
+        m_html = re.search(r"(<!DOCTYPE\s+html|<html\b)", cleaned, re.IGNORECASE)
+        if m_html and m_html.start() > 0 and "```" in cleaned[:m_html.start()]:
+            cleaned = cleaned[m_html.start():]
+    return cleaned.strip() + "\n" if cleaned.strip() else cleaned
+
+
 def _write_module(args: Dict[str, Any]) -> Dict[str, Any]:
     ws = Path(str(args.get("workspace_dir", "."))).resolve()
     rel = str(args.get("file_path", ""))
     content = str(args.get("content", ""))
+    allow_placeholders = bool(args.get("allow_placeholders", False))
     target = _safe_target(ws, rel)
+    content = _strip_markdown_fences(content, target.suffix.lower())
+    if not allow_placeholders:
+        trunc_err = _detect_truncation_or_placeholders(content, target.suffix.lower())
+        if trunc_err:
+            return {"success": False, "error": f"Error: {trunc_err}"}
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return {"success": True, "file_path": rel, "bytes": len(content.encode("utf-8")), "refresh_workspace": True}
