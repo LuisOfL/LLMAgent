@@ -1,20 +1,21 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Antigravity Studio - Visual Studio Code + GGUF RTX 4050</title>
-  
-  <!-- Tipografía & Iconos -->
+  <title>LLMAgent</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+  <link rel="icon" type="image/png" sizes="64x64" href="/static/logo.png?v=2">
+  <link rel="shortcut icon" href="/favicon.ico?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Kaushan+Script&display=swap" rel="stylesheet">
 
-  <!-- Markdown Parser -->
+  <!-- Markdown del agente -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-  <!-- Monaco Editor (El motor oficial de Visual Studio Code) -->
+  <!-- Monaco Editor (motor de Visual Studio Code) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 
   <!-- Auto-redirección si se abrió accidentalmente como archivo local file:/// -->
@@ -24,347 +25,883 @@
     }
   </script>
 
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4.16">
 </head>
-<body class="vscode-theme">
-  <div class="workbench">
-    
-    <!-- 1. ACTIVITY BAR (Barra de actividades lateral izquierda de 48px) -->
-    <nav class="activity-bar">
-      <div class="activity-top">
-        <button class="activity-icon active" id="act-explorer" title="Explorador de Archivos">
-          <i class="fa-regular fa-copy"></i>
+
+<body>
+
+  <!-- PORTADA EDITORIAL ESTILO BUGATTI DESTRIER CON VIDEO -->
+  <section id="splash-bugatti" class="splash-bugatti" aria-label="LLMAgent">
+    <video id="splash-video" class="splash-video" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+      <source src="/static/splash_bg.mp4?v=1" type="video/mp4">
+    </video>
+    <div class="splash-vignette" aria-hidden="true"></div>
+
+    <header class="splash-top">
+      <button id="btn-splash-menu" class="splash-nav-link" type="button">
+        <span class="splash-hamburger" aria-hidden="true"><i></i><i></i></span>
+        <span>AGENT</span>
+      </button>
+      <div class="splash-brand-center">
+        <span class="splash-wordmark">LLMAGENT</span>
+      </div>
+      <div class="splash-nav-right">
+        <img src="/static/logo.png?v=1" alt="LLMAgent" class="splash-logo-img">
+        <span>LOCAL</span>
+      </div>
+    </header>
+
+    <div class="splash-center-hero">
+      <h1 class="splash-script-title">LLMAgent</h1>
+      <button id="btn-splash-enter" class="splash-enter-btn" type="button">
+        <span>ENTER THE AGENT</span>
+      </button>
+    </div>
+
+    <div class="splash-spacer" aria-hidden="true"></div>
+  </section>
+
+  <!-- Conjunto de iconos en línea: la interfaz no depende de ninguna fuente externa -->
+  <svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-folder" viewBox="0 0 24 24">
+      <path
+        d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4L10 8h9.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
+    </symbol>
+    <symbol id="i-folder-open" viewBox="0 0 24 24">
+      <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4L10 8h9.5A1.5 1.5 0 0 1 21 9.5V12" />
+      <path d="M3 12h18l-1.8 6.2A1.5 1.5 0 0 1 17.8 19H4.6a1.5 1.5 0 0 1-1.4-1.9z" />
+    </symbol>
+    <symbol id="i-folder-plus" viewBox="0 0 24 24">
+      <path
+        d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4L10 8h9.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
+      <path d="M12 11v6M9 14h6" />
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+    </symbol>
+    <symbol id="i-code" viewBox="0 0 24 24">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <path d="m13 12-2 2 2 2" />
+      <path d="m17 12 2 2-2 2" />
+    </symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    </symbol>
+    <symbol id="i-image-file" viewBox="0 0 24 24">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <circle cx="9.5" cy="13" r="1.3" />
+      <path d="m8 18 2.5-2.5 2 2 1.5-1.5 2 2" />
+    </symbol>
+    <symbol id="i-save" viewBox="0 0 24 24">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24">
+      <path d="M7 4v16l13-8z" />
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24">
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24">
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <path d="M4 10h3M4 14h3M17 10h3M17 14h3M10 4v3M14 4v3M10 17v3M14 17v3" />
+    </symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 3 2.5 15 0 18M12 3c-2.5 3-2.5 15 0 18" />
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24">
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="m6 7 1 13h10l1-13" />
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24">
+      <path d="M12 5v14M5 12h14" />
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24">
+      <path d="M21 12a9 9 0 1 1-3-6.7" />
+      <path d="M21 4v5h-5" />
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24">
+      <path d="m6 9 6 6 6-6" />
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24">
+      <path d="M6 6l12 12M18 6 6 18" />
+    </symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24">
+      <path d="M12 19V5M6 11l6-6 6 6" />
+    </symbol>
+    <symbol id="i-image" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m4 18 5-5 4 4 3-3 4 4" />
+    </symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24">
+      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z" />
+      <circle cx="12" cy="12" r="2.6" />
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 24 24">
+      <path d="M5 7h14M5 12h14M5 17h9" />
+    </symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24">
+      <path d="M4 18a8 8 0 1 1 16 0" />
+      <path d="m12 14 4-4" />
+    </symbol>
+    <symbol id="i-external" viewBox="0 0 24 24">
+      <path d="M14 5h5v5" />
+      <path d="M19 5 10 14" />
+      <path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+    </symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24">
+      <path d="M13 2 4 14h6l-1 8 9-12h-6z" />
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24">
+      <path d="m5 12 5 5L20 7" />
+    </symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24">
+      <path d="M4 17l6-6-6-6M12 19h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    </symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24">
+      <path d="M12 4.5 2.8 20h18.4z" />
+      <path d="M12 10v4.5M12 17.6v.1" />
+    </symbol>
+    <symbol id="i-loader" viewBox="0 0 24 24">
+      <path d="M12 3a9 9 0 1 0 9 9" />
+    </symbol>
+    <symbol id="i-arrow-up-level" viewBox="0 0 24 24">
+      <path d="M12 20V6M6 12l6-6 6 6" />
+    </symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24">
+      <path d="M4 12h16M14 6l6 6-6 6" />
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24">
+      <path d="M12 4v12M6 10l6 6 6-6M4 20h16" />
+    </symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </symbol>
+  </svg>
+
+  <div class="ags">
+
+    <!-- 1. BARRA SUPERIOR -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-name">LLMAgent</span>
+      </div>
+
+      <div class="topbar-right">
+        <button class="nav-btn active" id="act-explorer" title="Explorador de archivos">
+          <svg class="ico">
+            <use href="#i-folder" />
+          </svg><span>Explorador</span>
         </button>
-        <button class="activity-icon" id="act-settings" title="Configuración de GPU y Modelo GGUF">
-          <i class="fa-solid fa-microchip"></i>
+        <button class="nav-btn" id="act-models-hub" title="Cambiar o descargar modelos GGUF (estilo LM Studio)">
+          <svg class="ico">
+            <use href="#i-download" />
+          </svg><span>Modelos</span>
+        </button>
+        <button class="nav-btn" id="act-settings" title="Configuración de GPU y modelo">
+          <svg class="ico">
+            <use href="#i-chip" />
+          </svg><span>Ajustes</span>
+        </button>
+        <span class="vline"></span>
+        <button class="icon-btn" id="act-toggle-agent" title="Mostrar u ocultar el panel del agente">
+          <svg class="ico">
+            <use href="#i-list" />
+          </svg>
         </button>
       </div>
-      <div class="activity-bottom">
-        <button class="activity-icon" id="act-toggle-agent" title="Alternar Panel de IA Antigravity">
-          <i class="fa-solid fa-wand-magic-sparkles"></i>
-        </button>
-      </div>
-    </nav>
+    </header>
 
-    <!-- 2. PRIMARY SIDEBAR (Panel Explorador / Ajustes) -->
-    <aside class="primary-sidebar" id="primary-sidebar">
-      
-      <!-- VISTA EXPLORADOR DE ARCHIVOS -->
-      <div class="sidebar-view" id="view-explorer">
-        <div class="sidebar-header">
-          <span class="view-title">EXPLORADOR</span>
-          <div class="view-actions">
-            <button id="btn-new-file" class="action-btn" title="Nuevo Archivo"><i class="fa-solid fa-file-circle-plus"></i></button>
-            <button id="btn-new-folder" class="action-btn" title="Nueva Carpeta"><i class="fa-solid fa-folder-plus"></i></button>
-            <button id="btn-refresh-tree" class="action-btn" title="Refrescar Explorador"><i class="fa-solid fa-rotate-right"></i></button>
-          </div>
-        </div>
+    <!-- 2. ÁREA DE TRABAJO -->
+    <div class="workarea">
 
-        <!-- Carpeta de Proyecto Abierta -->
-        <div class="folder-header-bar">
-          <div class="folder-info">
-            <i class="fa-solid fa-chevron-down"></i>
-            <span id="workspace-folder-name" class="folder-name">Cargando carpeta...</span>
-          </div>
-          <button id="btn-open-workspace" class="btn-open-folder-pill" title="Cambiar de Carpeta / Abrir Proyecto">
-            <i class="fa-solid fa-folder-open"></i> Abrir Carpeta
-          </button>
-        </div>
+      <!-- 2.1 BANCO (Archivos y Editor a la izquierda) -->
+      <section class="bank">
 
-        <!-- Árbol de Archivos -->
-        <div class="file-tree-container" id="file-tree-container">
-          <!-- Items generados dinámicamente -->
-        </div>
-      </div>
-
-      <!-- VISTA CONFIGURACIÓN DE GPU / MODELO -->
-      <div class="sidebar-view hidden" id="view-settings">
-        <div class="sidebar-header">
-          <span class="view-title">CONFIGURACIÓN GGUF & GPU</span>
-          <button id="btn-purge-vram-side" class="action-btn" title="Limpiar VRAM y eliminar procesos zombies">
-            <i class="fa-solid fa-broom"></i>
-          </button>
-        </div>
-
-        <div class="settings-content">
-          <!-- Telemetría de Hardware -->
-          <div class="settings-card">
-            <h4><i class="fa-solid fa-gauge-high"></i> Telemetría RTX 4050</h4>
-            <div class="telemetry-stat">
-              <span>VRAM: <b id="vram-text">0 / 6.1 GB</b></span>
-              <span id="vram-pct-text">0%</span>
-            </div>
-            <div class="progress-bar-bg">
-              <div class="progress-bar-fill" id="vram-fill" style="width: 0%;"></div>
-            </div>
-            <div class="telemetry-stat" style="margin-top: 6px;">
-              <span>RAM Sistema: <b id="ram-text">0 / 16 GB</b></span>
-            </div>
-            <div class="progress-bar-bg">
-              <div class="progress-bar-fill ram-fill" id="ram-fill" style="width: 0%;"></div>
+        <aside class="explorer" id="view-explorer">
+          <div class="exp-head">
+            <svg class="ico exp-caret" aria-hidden="true">
+              <use href="#i-chevron" />
+            </svg>
+            <span id="workspace-folder-name">Proyecto</span>
+            <div class="exp-actions">
+              <button class="icon-btn sm" id="btn-new-file" title="Nuevo archivo">
+                <svg class="ico sm" aria-hidden="true">
+                  <use href="#i-plus" />
+                </svg>
+              </button>
+              <button class="icon-btn sm" id="btn-new-folder" title="Nueva carpeta">
+                <svg class="ico sm" aria-hidden="true">
+                  <use href="#i-folder-plus" />
+                </svg>
+              </button>
+              <button class="icon-btn sm" id="btn-download-url" title="Descargar archivo desde URL de internet al proyecto">
+                <svg class="ico sm" aria-hidden="true">
+                  <use href="#i-download" />
+                </svg>
+              </button>
+              <button class="icon-btn sm" id="btn-refresh-tree" title="Refrescar explorador">
+                <svg class="ico sm" aria-hidden="true">
+                  <use href="#i-refresh" />
+                </svg>
+              </button>
             </div>
           </div>
 
-          <!-- Selección de Modelo -->
-          <div class="settings-card">
-            <h4><i class="fa-solid fa-brain"></i> Modelo GGUF Activo</h4>
-            <label class="setting-label">Modelo de Lenguaje (Texto):</label>
-            <select id="model-select" class="vscode-select"></select>
+          <div class="exp-open">
+            <button class="open-btn" id="btn-open-workspace" title="Cambiar de carpeta o abrir proyecto">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-folder" />
+              </svg><span>Abrir carpeta</span>
+            </button>
+          </div>
 
-            <div class="mmproj-box">
-              <label class="checkbox-label">
+          <div class="tree" id="file-tree-container"></div>
+          <div class="exp-foot" id="explorer-path" title="">—</div>
+        </aside>
+
+        <div class="editor" id="editor-pane">
+
+          <div class="tabs" id="tabs-bar" role="tablist" aria-label="Archivos abiertos"></div>
+
+          <div class="path-row">
+            <svg class="ico sm" aria-hidden="true">
+              <use href="#i-file" />
+            </svg>
+            <span id="breadcrumb-path">Sin archivo abierto</span>
+          </div>
+
+          <div class="actions-row">
+            <button class="tool-btn" id="btn-save-file" title="Guardar cambios (Ctrl+S)">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-save" />
+              </svg><span>Guardar</span>
+            </button>
+            <button class="tool-btn run" id="btn-run-project" title="Ejecutar main.py o abrir la app">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-play" />
+              </svg><span>Probar / Ejecutar</span>
+            </button>
+            <button class="tool-btn" id="btn-compile-check" title="Compilar y validar sintaxis de este archivo (Python AST / JSON / JS)">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-check" />
+              </svg><span>Compilar</span>
+            </button>
+            <button class="tool-btn" id="btn-export-pdf" title="Exportar documento o código actual a un archivo PDF formateado">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-file" />
+              </svg><span>Exportar PDF</span>
+            </button>
+            <button class="tool-btn" id="btn-toggle-terminal" title="Abrir o cerrar la terminal integrada">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-terminal" />
+              </svg><span>Terminal</span>
+            </button>
+            <button class="tool-btn hidden" id="btn-open-preview" title="Previsualizar en el navegador">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-globe" />
+              </svg><span>Ver App</span>
+            </button>
+          </div>
+
+          <div class="code" id="monaco-container"></div>
+
+          <!-- Terminal Integrada con Chequeo de Dependencias y Salida en Vivo -->
+          <div class="terminal-drawer hidden" id="terminal-drawer">
+            <div class="term-header">
+              <div class="term-tabs">
+                <button class="term-tab-btn active" id="tab-btn-console" data-tab="console">
+                  <svg class="ico xs" aria-hidden="true"><use href="#i-terminal" /></svg>
+                  <span>Terminal / Salida</span>
+                </button>
+                <button class="term-tab-btn" id="tab-btn-deps" data-tab="deps">
+                  <svg class="ico xs" aria-hidden="true"><use href="#i-check" /></svg>
+                  <span>Dependencias</span>
+                  <span class="deps-badge hidden" id="term-deps-count">0</span>
+                </button>
+              </div>
+              <div class="term-actions">
+                <button class="term-act-btn" id="btn-term-run-active" title="Ejecutar archivo activo checando dependencias">
+                  <svg class="ico xs" aria-hidden="true"><use href="#i-play" /></svg>
+                  <span>Ejecutar archivo</span>
+                </button>
+                <button class="term-act-btn" id="btn-term-clear" title="Limpiar salida de la terminal">
+                  <svg class="ico xs" aria-hidden="true"><use href="#i-trash" /></svg>
+                  <span>Limpiar</span>
+                </button>
+                <button class="term-act-btn danger" id="btn-term-kill" title="Detener proceso en ejecución">
+                  <svg class="ico xs" aria-hidden="true"><use href="#i-stop" /></svg>
+                  <span>Detener</span>
+                </button>
+                <button class="term-act-btn" id="btn-term-external" title="Abrir en ventana CMD externa de Windows">
+                  <svg class="ico xs" aria-hidden="true"><use href="#i-external" /></svg>
+                  <span>Abrir en CMD</span>
+                </button>
+                <button class="term-act-btn icon-only" id="btn-term-close" title="Cerrar panel de terminal">
+                  <svg class="ico xs" aria-hidden="true"><use href="#i-x" /></svg>
+                </button>
+              </div>
+            </div>
+            
+            <div class="term-view active" id="term-view-console">
+              <div class="term-console-output" id="term-console-output"></div>
+              <div class="term-input-box">
+                <span class="term-prompt">&gt;</span>
+                <input type="text" id="term-cli-input" placeholder="Escribe un comando (ej: pip install ..., python main.py, dir) o presiona Enter..." autocomplete="off" />
+                <button id="btn-term-submit">Ejecutar</button>
+              </div>
+            </div>
+
+            <div class="term-view hidden" id="term-view-deps">
+              <div class="term-deps-panel" id="term-deps-list">
+                <div class="term-deps-empty">Abre un archivo Python para inspeccionar y auditar sus dependencias.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="welcome-screen" id="welcome-screen">
+            <div class="welcome-inner">
+              <span class="welcome-icon" aria-hidden="true"><svg class="ico">
+                  <use href="#i-code" />
+                </svg></span>
+              <h2>Ningún archivo abierto</h2>
+              <p>Abre un archivo del explorador o cambia la carpeta del proyecto.</p>
+              <div class="welcome-actions">
+                <button class="btn-primary" id="btn-welcome-open-folder">Abrir carpeta</button>
+                <button class="btn-ghost" id="btn-welcome-ask-agent">Escribir al agente</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 2.2 AJUSTES DE MODELO Y GPU -->
+        <div class="settings-panel hidden" id="view-settings">
+
+          <div class="set-head">
+            <div class="set-title">
+              <svg class="ico" aria-hidden="true">
+                <use href="#i-chip" />
+              </svg>
+              <span>Modelo y GPU</span>
+            </div>
+            <button class="icon-btn" data-back="explorer" title="Volver al explorador"
+              aria-label="Volver al explorador">
+              <svg class="ico" aria-hidden="true">
+                <use href="#i-x" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="settings-content">
+
+            <section class="sec">
+              <div class="sec-label"><span>Modelo GGUF</span></div>
+              <div class="field">
+                <select class="vselect" id="model-select" aria-label="Modelo GGUF"></select>
+                <svg class="ico sel-ico" aria-hidden="true">
+                  <use href="#i-chevron" />
+                </svg>
+              </div>
+              <div class="path-line">
+                <svg class="ico" aria-hidden="true">
+                  <use href="#i-folder" />
+                </svg>
+                <span id="model-path-line">models\</span>
+              </div>
+              <div class="mini-row">
+                <button class="mini-btn" id="btn-browse-gguf" title="Elegir un archivo .gguf del disco">
+                  <svg class="ico sm" aria-hidden="true">
+                    <use href="#i-folder-plus" />
+                  </svg>Explorar en PC…
+                </button>
+                <button class="mini-btn" id="btn-open-models-dir"
+                  title="Abrir la carpeta models en el explorador de Windows">
+                  <svg class="ico sm" aria-hidden="true">
+                    <use href="#i-external" />
+                  </svg>Abrir carpeta
+                </button>
+              </div>
+            </section>
+
+            <section class="sec">
+              <div class="sec-label"><span>Visión</span></div>
+              <label class="chk">
                 <input type="checkbox" id="enable-mmproj" checked>
-                <span>Proyector Multimodal (Visión)</span>
+                <span>Proyector multimodal (Visión)</span>
               </label>
-              <select id="mmproj-select" class="vscode-select" style="margin-top:4px;"></select>
-            </div>
+              <div class="field">
+                <select class="vselect" id="mmproj-select" aria-label="Proyector multimodal"></select>
+                <svg class="ico sel-ico" aria-hidden="true">
+                  <use href="#i-chevron" />
+                </svg>
+              </div>
+            </section>
 
-            <div class="setting-row" style="margin-top:10px;">
-              <label>Capas en GPU (RTX 4050):</label>
-              <span id="gpu-layers-badge" class="badge-num">24</span>
-            </div>
-            <input type="range" id="gpu-layers-slider" min="0" max="60" value="24" class="vscode-slider">
+            <section class="sec">
+              <div class="sec-label">
+                <span>Capas en GPU</span>
+                <span class="badge-num" id="gpu-layers-badge">33</span>
+              </div>
+              <div class="slider-row">
+                <input type="range" id="gpu-layers-slider" min="0" max="60" value="33" aria-label="Capas en GPU">
+              </div>
+              <div class="ticks" aria-hidden="true">
+                <i class="major"></i><i></i><i></i><i class="major"></i><i></i><i></i><i class="major"></i>
+              </div>
+              <div class="scale" aria-hidden="true"><span>0</span><span>30</span><span>60</span></div>
+            </section>
 
-            <div class="setting-row">
-              <label>Ventana de Contexto:</label>
-              <select id="ctx-size-select" class="vscode-select-sm">
-                <option value="8192">8192</option>
-                <option value="16384" selected>16384 (Sin Límites / Ultra)</option>
-                <option value="32768">32768 (Contexto Máximo)</option>
-              </select>
-            </div>
+            <section class="sec">
+              <div class="sec-label"><span>Ventana de contexto</span></div>
+              <div class="field">
+                <select class="vselect" id="ctx-size-select" aria-label="Ventana de contexto">
+                  <option value="8192">8192 tokens</option>
+                  <option value="16384" selected>16384 tokens</option>
+                  <option value="32768">32768 tokens</option>
+                </select>
+                <svg class="ico sel-ico" aria-hidden="true">
+                  <use href="#i-chevron" />
+                </svg>
+              </div>
+            </section>
 
-            <button id="btn-load-model" class="btn-vscode btn-primary-vscode" style="margin-top:12px;">
-              <i class="fa-solid fa-bolt"></i> Iniciar e Inyectar en GPU
+            <section class="sec">
+              <div class="sec-label"><span>Carga</span></div>
+              <div class="load-list">
+                <div class="load-row"><span>Hilos de CPU</span><b>6</b></div>
+                <div class="load-row"><span>Flash Attention</span><b>Activado</b></div>
+                <div class="load-row"><span>Caché KV</span><b>q4_0</b></div>
+              </div>
+            </section>
+
+            <section class="sec">
+              <div class="sec-label"><span>Anonimato y Privacidad (Tor / SOCKS5)</span></div>
+              <label class="chk">
+                <input type="checkbox" id="chk-proxy-enabled">
+                <span>Enrutar descargas y búsquedas por Proxy</span>
+              </label>
+              <label class="chk" style="margin-top: 6px;">
+                <input type="checkbox" id="chk-proxy-autostart">
+                <span>Activar modo anónimo automáticamente al abrir la app</span>
+              </label>
+              <div class="field" style="margin-top: 8px;">
+                <input type="text" id="proxy-url-input" placeholder="socks5://127.0.0.1:9050" value="socks5://127.0.0.1:9050" style="width: 100%; height: 32px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); padding: 0 10px; font-family: var(--mono); font-size: 11px;">
+              </div>
+              <div class="path-line" style="margin-top: 6px;">
+                <svg class="ico" aria-hidden="true"><use href="#i-shield" /></svg>
+                <span id="proxy-status-line">Oculta tu IP pública en búsquedas y descargas</span>
+              </div>
+              <div class="mini-row">
+                <button class="mini-btn" id="btn-test-proxy" title="Comprobar si Tor o el proxy están respondiendo">
+                  <svg class="ico sm" aria-hidden="true"><use href="#i-check" /></svg>Comprobar estado
+                </button>
+                <button class="mini-btn" id="btn-save-proxy" title="Guardar configuración de proxy">
+                  <svg class="ico sm" aria-hidden="true"><use href="#i-save" /></svg>Guardar cambios
+                </button>
+              </div>
+            </section>
+
+            <section class="sec">
+              <div class="sec-label"><span>Trabajador Nube Multi-Agente (Gemini / Bedrock)</span></div>
+              <label class="chk">
+                <input type="checkbox" id="chk-cloud-enabled">
+                <span>Activar Trabajador Nube de Alta Potencia</span>
+              </label>
+              <div class="field" style="margin-top: 8px;">
+                <select class="vselect" id="cloud-provider-select" aria-label="Proveedor">
+                  <option value="bedrock" selected>AWS Bedrock: Amazon Nova Micro ($0.035/M) [AWS CLI]</option>
+                  <option value="gemini">Google Gemini 1.5/2.0 Flash (Gratis / Ultra-económico)</option>
+                  <option value="openrouter">OpenRouter (DeepSeek R1 / Llama 3.3)</option>
+                </select>
+                <svg class="ico sel-ico" aria-hidden="true"><use href="#i-chevron" /></svg>
+              </div>
+              <div class="field" style="margin-top: 6px;">
+                <input type="password" id="cloud-apikey-input" placeholder="API Key (Opcional en Bedrock con AWS CLI)" style="width: 100%; height: 32px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); padding: 0 10px; font-family: var(--mono); font-size: 11px;">
+              </div>
+              <div class="field" style="margin-top: 6px;">
+                <input type="text" id="cloud-model-input" placeholder="Modelo (ej: amazon.nova-micro-v1:0)" value="amazon.nova-micro-v1:0" style="width: 100%; height: 32px; background: var(--ink-2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); padding: 0 10px; font-family: var(--mono); font-size: 11px;">
+              </div>
+              <div class="path-line" style="margin-top: 6px;">
+                <svg class="ico" aria-hidden="true"><use href="#i-bolt" /></svg>
+                <span id="cloud-status-line">Cerebro Qwen Local (sin censura) + Trabajador Nube</span>
+              </div>
+              <div class="mini-row">
+                <button class="mini-btn" id="btn-test-cloud" title="Probar conexión con el trabajador">
+                  <svg class="ico sm" aria-hidden="true"><use href="#i-check" /></svg>Probar API
+                </button>
+                <button class="mini-btn" id="btn-save-cloud" title="Guardar configuración del trabajador">
+                  <svg class="ico sm" aria-hidden="true"><use href="#i-save" /></svg>Guardar ajustes
+                </button>
+              </div>
+            </section>
+
+          </div>
+
+          <div class="set-foot">
+            <button class="btn-ghost" id="btn-purge-vram-side" title="Limpiar VRAM y eliminar procesos zombies">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-refresh" />
+              </svg>Limpiar VRAM
             </button>
-            <button id="btn-unload-model" class="btn-vscode btn-danger-vscode hidden" style="margin-top:12px;">
-              <i class="fa-solid fa-power-off"></i> Descargar Modelo
+            <button class="btn-ghost" id="btn-purge-ram-side" title="Liberar RAM del sistema sin detener el modelo">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-refresh" />
+              </svg>Limpiar RAM
+            </button>
+            <button class="btn-danger" id="btn-load-model" title="Cargar el modelo en la GPU">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-bolt" />
+              </svg>Iniciar e inyectar en GPU
+            </button>
+            <button class="btn-danger hidden" id="btn-unload-model" title="Descargar el modelo y liberar la VRAM">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-stop" />
+              </svg>Descargar modelo
+            </button>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- 2.3 AGENTE (Chat a la derecha) -->
+      <section class="agent" id="agent-panel">
+
+        <header class="agent-head">
+          <h1 class="agent-title">Agente</h1>
+          <div class="modes" role="tablist" aria-label="Modo del agente">
+            <button class="mode-pill active" id="mode-agent-btn"
+              title="El modelo puede crear y modificar archivos del proyecto">Crear Apps</button>
+            <button class="mode-pill" id="mode-chat-btn" title="Conversación libre sin modificar archivos">Pregunta
+              Normal</button>
+          </div>
+          <div class="agent-head-actions">
+            <button class="icon-btn" id="btn-open-chat-tab" title="Abrir Chat Normal en una nueva pestaña"
+              aria-label="Abrir Chat Normal en nueva pestaña">
+              <svg class="ico">
+                <use href="#i-external" />
+              </svg>
+            </button>
+            <button class="icon-btn" id="btn-clear-agent-chat" title="Limpiar conversación">
+              <svg class="ico">
+                <use href="#i-trash" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="normal-chat-bar hidden" id="normal-chat-bar">
+          <div class="normal-chat-tabs" id="normal-chat-tabs" role="tablist" aria-label="Pestañas de chat normal"></div>
+          <div class="normal-chat-actions">
+            <button class="icon-btn sm-btn" id="btn-new-normal-chat" title="Nuevo chat normal"
+              aria-label="Nuevo chat normal">
+              <svg class="ico xs">
+                <use href="#i-plus" />
+              </svg>
+            </button>
+            <button class="normal-history-btn" id="btn-toggle-normal-history" title="Ver historial de chats"
+              aria-label="Ver historial de chats">
+              <svg class="ico xs">
+                <use href="#i-list" />
+              </svg>
+              <span>Historial</span>
             </button>
           </div>
         </div>
-      </div>
 
-    </aside>
+        <div class="normal-history-drawer hidden" id="normal-history-drawer">
+          <div class="normal-history-head">
+            <span>Historial de chats</span>
+            <button class="icon-btn sm-btn" id="btn-close-normal-history" title="Cerrar historial"
+              aria-label="Cerrar historial">
+              <svg class="ico xs">
+                <use href="#i-x" />
+              </svg>
+            </button>
+          </div>
+          <div class="normal-history-list" id="normal-history-list"></div>
+        </div>
 
-    <!-- 3. EDITOR AREA (Área central de Visual Studio Code) -->
-    <main class="editor-area">
-      <!-- Barra de Pestañas (Tabs) -->
-      <div class="tabs-bar" id="tabs-bar">
-        <!-- Pestañas dinámicas -->
-      </div>
+        <div class="ctx hidden" id="agent-context-bar">
+          <svg class="ico" aria-hidden="true">
+            <use href="#i-eye" />
+          </svg>
+          <span>Leyendo en pantalla</span>
+          <b id="agent-context-filename">Ninguno</b>
+        </div>
 
-      <!-- Barra de herramientas del archivo abierto -->
-      <div class="editor-toolbar" id="editor-toolbar">
-        <div class="file-path-breadcrumb" id="breadcrumb-path">Sin archivo abierto</div>
-        <div class="toolbar-actions">
-          <button id="btn-run-project" class="tool-btn" title="Ejecutar main.py o abrir app en Windows" style="color:#34d399; font-weight:600;">
-            <i class="fa-solid fa-play"></i> Probar / Ejecutar
-          </button>
-          <button id="btn-save-file" class="tool-btn" title="Guardar cambios (Ctrl+S)">
-            <i class="fa-regular fa-floppy-disk"></i> Guardar
-          </button>
-          <button id="btn-open-preview" class="tool-btn hidden" title="Previsualizar en el navegador">
-            <i class="fa-solid fa-globe"></i> Ver App
+        <div class="thread" id="agent-messages">
+          <div class="starters">
+            <button class="sample-btn"
+              data-prompt="Crea una calculadora científica con diseño oscuro y teclado completo.">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-plus" />
+              </svg>Calculadora científica
+            </button>
+            <button class="sample-btn" data-prompt="Crea el juego de Snake en canvas con puntuación más alta.">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-plus" />
+              </svg>Juego de Snake
+            </button>
+            <button class="sample-btn"
+              data-prompt="Crea una lista de tareas con filtros y persistencia en localStorage.">
+              <svg class="ico sm" aria-hidden="true">
+                <use href="#i-plus" />
+              </svg>Lista de tareas
+            </button>
+          </div>
+        </div>
+
+        <div class="thread hidden" id="chat-messages"></div>
+
+        <div class="continue-banner hidden" id="continue-banner">
+          <span>Respuesta extensa pausada por límite de longitud.</span>
+          <button class="continue-btn" id="btn-continue-generation">
+            <svg class="ico sm" aria-hidden="true">
+              <use href="#i-play" />
+            </svg>Continuar
           </button>
         </div>
-      </div>
 
-      <!-- Contenedor de Monaco Editor -->
-      <div id="monaco-container" class="monaco-container"></div>
-
-      <!-- Pantalla de Bienvenida de VS Code (si no hay archivos abiertos) -->
-      <div class="welcome-screen" id="welcome-screen">
-        <div class="welcome-content">
-          <div class="welcome-logo">
-            <i class="fa-solid fa-bolt-lightning"></i>
+        <div class="composer">
+          <div class="img-preview hidden" id="image-preview-box">
+            <img id="image-preview-img" alt="Imagen adjunta" src="">
+            <button class="img-cancel" id="btn-cancel-image" title="Quitar imagen adjunta"
+              aria-label="Quitar imagen adjunta">&times;</button>
           </div>
-          <h2>Antigravity Code Studio</h2>
-          <p>Entorno Gráfico de Desarrollo con IA Local de Alto Rendimiento (RTX 4050 6GB)</p>
 
-          <div class="quick-links">
-            <div class="link-item" id="btn-welcome-open-folder">
-              <i class="fa-solid fa-folder-open"></i>
-              <div>
-                <strong>Abrir Carpeta de Proyecto...</strong>
-                <span>Elige o crea un proyecto en tu PC</span>
+          <input type="file" id="image-input" accept="image/*" hidden>
+
+          <div class="composer-box">
+            <textarea id="agent-textarea" rows="1"
+              placeholder="Pide una app o haz una pregunta... (Enter para enviar, Shift+Enter para salto)"></textarea>
+            <div class="composer-foot">
+              <div class="cf-left">
+                <button class="icon-btn" id="btn-upload-image" title="Adjuntar imagen (o pega con Ctrl+V)"
+                  aria-label="Adjuntar imagen">
+                  <svg class="ico" aria-hidden="true">
+                    <use href="#i-image" />
+                  </svg>
+                </button>
+                <button class="web-toggle" id="btn-toggle-web" title="Búsqueda web en vivo">
+                  <svg class="ico" aria-hidden="true">
+                    <use href="#i-globe" />
+                  </svg><span>Web ON</span>
+                </button>
+                <button class="web-toggle off" id="btn-toggle-anon" title="Modo Anónimo (Tor / Proxy SOCKS5)">
+                  <svg class="ico" aria-hidden="true">
+                    <use href="#i-shield" />
+                  </svg><span>Anon OFF</span>
+                </button>
+                <button class="web-toggle off" id="btn-toggle-workers" title="Trabajadores Nube Multi-Agente (Gemini Flash / Bedrock)">
+                  <svg class="ico" aria-hidden="true">
+                    <use href="#i-bolt" />
+                  </svg><span>Cloud OFF</span>
+                </button>
+              </div>
+              <div class="cf-right">
+                <button class="stop-btn hidden" id="btn-stop-agent" title="Detener generación"
+                  aria-label="Detener generación">
+                  <svg class="ico" aria-hidden="true">
+                    <use href="#i-stop" />
+                  </svg>
+                </button>
+                <button class="send-btn" id="btn-send-agent" title="Enviar" aria-label="Enviar mensaje">
+                  <svg class="ico" aria-hidden="true">
+                    <use href="#i-arrow-up" />
+                  </svg>
+                </button>
               </div>
             </div>
-            <div class="link-item" id="btn-welcome-ask-agent">
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <div>
-                <strong>Pedir a la IA que cree una App...</strong>
-                <span>Genera una aplicación completa con un solo comando</span>
-              </div>
-            </div>
           </div>
         </div>
+
+      </section>
+
+    </div>
+
+    <!-- 3. DOCK DEL MOTOR -->
+    <footer class="dock">
+
+      <div class="dock-group g-gpu">
+        <div class="dk-head">
+          <svg class="ico" aria-hidden="true">
+            <use href="#i-chip" />
+          </svg>
+          <span class="dk-label" id="status-vram-text">GPU</span>
+        </div>
+        <div class="dk-row">
+          <span class="dk-val" id="vram-text">0 / 0 GB</span>
+          <span class="dk-pct" id="vram-pct-text">0%</span>
+        </div>
+        <div class="bar">
+          <div class="progress-bar-fill" id="vram-fill" style="width:0%"></div>
+        </div>
       </div>
-    </main>
 
-    <!-- 4. SECONDARY SIDEBAR: AGENTE IA ANTIGRAVITY (Panel Derecho) -->
-    <section class="agent-panel" id="agent-panel">
-      <!-- Header del Agente -->
-      <div class="agent-header">
-        <div class="agent-title-box">
-          <i class="fa-solid fa-wand-magic-sparkles" style="color: #38bdf8;"></i>
-          <h3>Antigravity AI</h3>
+      <span class="dock-div" aria-hidden="true"></span>
+
+      <div class="dock-group g-ram">
+        <div class="dk-head"><span class="dk-label">RAM del sistema</span></div>
+        <div class="dk-row"><span class="dk-val" id="ram-text">0 / 0 GB</span></div>
+        <div class="bar">
+          <div class="progress-bar-fill ram" id="ram-fill" style="width:0%"></div>
         </div>
+      </div>
 
-        <!-- Selector de Modo: Creador de Apps vs Chat Normal -->
-        <div class="mode-switch-container">
-          <button class="mode-pill active" id="mode-agent-btn" title="El modelo puede crear y modificar archivos en tu proyecto">
-            <i class="fa-solid fa-bolt"></i> Crear Apps
-          </button>
-          <button class="mode-pill" id="mode-chat-btn" title="Preguntas y conversación libre sin modificar archivos">
-            <i class="fa-solid fa-comments"></i> Pregunta Normal
-          </button>
+      <span class="dock-div" aria-hidden="true"></span>
+
+      <div class="dock-group g-speed">
+        <div class="dk-head">
+          <svg class="ico" aria-hidden="true">
+            <use href="#i-gauge" />
+          </svg>
+          <span class="dk-label">Velocidad</span>
         </div>
+        <div class="dk-row"><span id="status-speed-text">0.0 t/s</span></div>
+      </div>
 
-        <!-- Botón Conexión a Internet (RAG Web) -->
-        <button id="btn-toggle-web" class="btn-toggle-web active" title="Búsqueda Web en Vivo (RAG Web)">
-          <i class="fa-solid fa-globe"></i> <span>Web ON</span>
+      <div class="dock-right">
+        <button class="model-chip clickable" id="status-model-chip" type="button" title="Cambiar o descargar modelos (estilo LM Studio)">
+          <svg class="ico" aria-hidden="true">
+            <use href="#i-chip" />
+          </svg>
+          <span class="model-name" id="status-model-name">Sin modelo</span>
+          <span class="quant" id="status-model-quant">—</span>
         </button>
-
-        <button id="btn-clear-agent-chat" class="action-btn" title="Limpiar conversación">
-          <i class="fa-solid fa-trash-can"></i>
-        </button>
-      </div>
-
-      <!-- Barra de Contexto Activo (Muestra qué archivo está leyendo la IA) -->
-      <div class="agent-context-bar" id="agent-context-bar">
-        <i class="fa-solid fa-eye" style="color:var(--vsc-cyan);"></i>
-        <span>Leyendo en pantalla: <b id="agent-context-filename">Ninguno (Abre un archivo para que lo analice)</b></span>
-      </div>
-
-      <!-- Historial de Conversación del Agente -->
-      <div class="agent-messages" id="agent-messages">
-        <div class="agent-welcome">
-          <div class="agent-avatar-welcome"><i class="fa-solid fa-robot"></i></div>
-          <h4>¿Qué quieres construir hoy?</h4>
-          <p>
-            En <b>Modo Crear Apps</b> puedo generar aplicaciones enteras (HTML/CSS/JS, Python, etc.) directamente en la carpeta abierta de tu proyecto.
-          </p>
-          <div class="sample-prompts">
-            <button class="sample-btn" data-prompt="Crea una aplicación web moderna de una calculadora científica con diseño futurista oscuro, efectos de sonido y responsive.">
-              🧮 Crear Calculadora Científica Futurista
-            </button>
-            <button class="sample-btn" data-prompt="Crea un juego clásico de Snake (la viborita) en HTML5 canvas con puntuación más alta y controles fluidos.">
-              🐍 Crear Juego de Snake en HTML5
-            </button>
-            <button class="sample-btn" data-prompt="Crea una aplicación de Lista de Tareas (Todo List) con categorías, filtros, modo oscuro y persistencia en LocalStorage.">
-              📝 Crear App de Tareas Inteligente
-            </button>
-          </div>
+        <span class="vline" aria-hidden="true"></span>
+        <div class="dk-file">
+          <svg class="ico sm" aria-hidden="true">
+            <use href="#i-file" />
+          </svg>
+          <span id="status-active-file">Sin archivo activo</span>
         </div>
       </div>
 
-      <!-- Alerta de Continuar Generación -->
-      <div id="continue-banner" class="continue-banner hidden">
-        <span>Respuesta extensa pausada por límite de longitud.</span>
-        <button id="btn-continue-generation" class="btn-continue-sm">
-          <i class="fa-solid fa-forward-step"></i> Continuar
-        </button>
-      </div>
-
-      <!-- Input del Agente -->
-      <div class="agent-input-container">
-        <!-- Preview de Imagen si se adjunta -->
-        <div id="image-preview-box" class="image-preview-box hidden">
-          <div class="preview-thumbnail">
-            <img id="image-preview-img" src="" alt="Adjunto">
-            <button id="btn-cancel-image" class="btn-cancel-img">&times;</button>
-          </div>
-          <span class="preview-text">Imagen lista para visión</span>
-        </div>
-
-        <div class="agent-input-box">
-          <input type="file" id="image-input" accept="image/*" style="display:none;">
-          <button id="btn-upload-image" class="agent-attach-btn" title="Adjuntar imagen (o pega con Ctrl+V)">
-            <i class="fa-regular fa-image"></i>
-          </button>
-          
-          <textarea 
-            id="agent-textarea" 
-            placeholder="Pide una app o haz una pregunta... (Enter para enviar, Shift+Enter para salto)"
-            rows="1"
-          ></textarea>
-
-          <div class="agent-send-actions">
-            <button id="btn-stop-agent" class="agent-stop-btn hidden" title="Detener generación">
-              <i class="fa-solid fa-circle-stop"></i>
-            </button>
-            <button id="btn-send-agent" class="agent-send-btn" title="Enviar">
-              <i class="fa-solid fa-arrow-up"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
+    </footer>
 
   </div>
 
-  <!-- 5. STATUS BAR INFERIOR (Estilo VS Code, 22px) -->
-  <footer class="status-bar">
-    <div class="status-left">
-      <div class="status-item"><i class="fa-solid fa-code-branch"></i> <span>main</span></div>
-      <div class="status-item" id="status-active-file"><span>Sin archivo activo</span></div>
-    </div>
-    <div class="status-right">
-      <div class="status-item" id="status-gpu-pill"><i class="fa-solid fa-microchip"></i> <span id="status-vram-text">RTX 4050</span></div>
-      <div class="status-item" id="status-speed-pill"><i class="fa-solid fa-gauge-high"></i> <span id="status-speed-text">0.0 t/s</span></div>
-      <div class="status-item"><span>UTF-8</span></div>
-    </div>
-  </footer>
-
-  <!-- MODAL VISUAL PARA ABRIR CARPETA / CAMBIAR DIRECTORIO -->
+  <!-- 4. MODAL PARA ABRIR CARPETA -->
   <div id="folder-picker-modal" class="modal-overlay hidden">
-    <div class="modal-card">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
       <div class="modal-header">
         <div class="modal-title">
-          <i class="fa-solid fa-folder-open" style="color:var(--vsc-cyan)"></i>
-          <span>Abrir Carpeta de Proyecto</span>
+          <svg class="ico" aria-hidden="true">
+            <use href="#i-folder" />
+          </svg>
+          <span id="modal-title-text">Abrir carpeta de proyecto</span>
         </div>
-        <button id="modal-btn-close" class="modal-close-icon">&times;</button>
+        <button id="modal-btn-close" class="modal-close-icon" title="Cerrar" aria-label="Cerrar">&times;</button>
       </div>
 
       <div class="modal-body">
-        <!-- Barra de navegación de ruta -->
         <div class="path-nav-bar">
-          <button id="modal-btn-up" class="btn-nav" title="Subir un nivel"><i class="fa-solid fa-arrow-up"></i></button>
+          <button id="modal-btn-up" class="btn-nav" title="Subir un nivel" aria-label="Subir un nivel">
+            <svg class="ico sm" aria-hidden="true">
+              <use href="#i-arrow-up-level" />
+            </svg>
+          </button>
           <input type="text" id="modal-path-input" class="modal-path-input" placeholder="Ruta de la carpeta...">
-          <button id="modal-btn-go" class="btn-nav" title="Ir a la ruta"><i class="fa-solid fa-arrow-right"></i></button>
+          <button id="modal-btn-go" class="btn-nav" title="Ir a la ruta" aria-label="Ir a la ruta">
+            <svg class="ico sm" aria-hidden="true">
+              <use href="#i-arrow-right" />
+            </svg>
+          </button>
         </div>
 
-        <!-- Accesos rápidos -->
-        <div class="shortcuts-row" id="modal-shortcuts-container">
-          <!-- Botones de Escritorio, Descargas, etc. -->
-        </div>
+        <div class="shortcuts-row" id="modal-shortcuts-container"></div>
 
-        <!-- Lista de carpetas -->
-        <div class="subfolders-list" id="modal-subfolders-container">
-          <!-- Carpetas hijas listadas aquí -->
-        </div>
+        <div class="subfolders-list" id="modal-subfolders-container"></div>
       </div>
 
       <div class="modal-footer">
         <div class="footer-left">
-          <button id="modal-btn-native-dialog" class="btn-vscode btn-secondary-vscode" title="Abrir selector nativo de Windows">
-            <i class="fa-brands fa-windows"></i> Selector Windows
+          <button id="modal-btn-native-dialog" class="btn-vscode btn-secondary-vscode"
+            title="Abrir el selector nativo de Windows">
+            Selector Windows
           </button>
           <button id="modal-btn-create-subfolder" class="btn-vscode btn-secondary-vscode">
-            <i class="fa-solid fa-folder-plus"></i> Nueva Carpeta
+            Nueva carpeta
           </button>
         </div>
         <div class="footer-right">
           <button id="modal-btn-cancel" class="btn-vscode btn-secondary-vscode">Cancelar</button>
           <button id="modal-btn-confirm" class="btn-vscode btn-primary-vscode">
-            <i class="fa-solid fa-check"></i> Seleccionar Esta Carpeta
+            <svg class="ico sm" aria-hidden="true">
+              <use href="#i-check" />
+            </svg>Seleccionar esta carpeta
           </button>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- MODAL GESTOR DE MODELOS ESTILO LM STUDIO -->
+  <div class="modal-overlay hidden" id="models-hub-modal">
+    <div class="modal-dialog models-hub-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg class="ico" aria-hidden="true">
+            <use href="#i-chip" />
+          </svg>
+          <span>Gestor de Modelos (GGUF)</span>
+        </div>
+        <button id="hub-btn-close" class="icon-btn" aria-label="Cerrar">
+          <svg class="ico" aria-hidden="true">
+            <use href="#i-x" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="hub-tabs">
+        <button type="button" class="hub-tab active" id="hub-tab-local">Mis Modelos</button>
+        <button type="button" class="hub-tab" id="hub-tab-discover">Descargar Modelos</button>
+      </div>
+
+      <div class="hub-download-banner hidden" id="hub-download-banner">
+        <div class="hub-dl-top">
+          <span id="hub-dl-name">Descargando...</span>
+          <span id="hub-dl-stats">0%</span>
+          <button type="button" class="mini-btn" id="hub-btn-cancel-dl">Cancelar</button>
+        </div>
+        <div class="bar">
+          <div class="progress-bar-fill" id="hub-dl-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="hub-body" id="hub-view-local">
+        <div class="hub-list" id="hub-local-list"></div>
+      </div>
+
+      <div class="hub-body hidden" id="hub-view-discover">
+        <div class="hub-search-row">
+          <input type="text" id="hub-search-input" placeholder="Buscar modelos GGUF en Hugging Face (ej. qwen3, llama 3, mistral)..." autocomplete="off">
+          <button type="button" class="btn-vscode btn-primary-vscode" id="btn-hub-search">Buscar</button>
+        </div>
+        <div class="hub-direct-row">
+          <input type="text" id="hub-direct-url" placeholder="O pega aquí una URL directa .gguf de Hugging Face..." autocomplete="off">
+          <button type="button" class="btn-vscode btn-secondary-vscode" id="btn-hub-direct-dl">Descargar URL</button>
+        </div>
+        <div class="hub-list" id="hub-discover-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/splash3d.js?v=3.1"></script>
+  <script src="app.js?v=4.3"></script>
 </body>
+
 </html>

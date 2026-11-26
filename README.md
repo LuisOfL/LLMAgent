@@ -1,62 +1,110 @@
-# HackingLLM Studio - Entorno Gráfico GGUF de Alto Rendimiento
+<div align="center">
 
-Entorno gráfico local hiper-optimizado para ejecutar modelos en formato `.gguf` aprovechando al máximo la tarjeta gráfica **NVIDIA GeForce RTX 4050 Laptop GPU (6 GB VRAM GDDR6)** y el procesador **AMD Ryzen (6 núcleos / 12 hilos)**.
+# LLMAgent
 
----
+**IDE Agéntico Local con Motor GGUF, Monaco Editor, MCP Tools y Gestor de Modelos estilo LM Studio**
 
-## ⚡ Solución a los Problemas Previos
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![llama.cpp](https://img.shields.io/badge/Engine-llama.cpp%20CUDA%20%2F%20CPU-black)](https://github.com/ggml-org/llama.cpp)
+[![Monaco Editor](https://img.shields.io/badge/Editor-Monaco-007ACC?logo=visualstudiocode&logoColor=white)](https://microsoft.github.io/monaco-editor/)
 
-### 1. ¿Por qué tardaba tanto la computadora al responder?
-* **Causa principal**: Cuando un modelo GGUF no tiene soporte CUDA activo o cuando se descargan más capas de las que caben en la VRAM de la GPU (6 GB), Windows activa la memoria compartida (*GPU Shared Memory Fallback*). Al transferir datos constantemente entre la RAM del sistema y la GPU por el bus PCIe, la velocidad colapsa de ~60 tokens/segundo a menos de 1 token/segundo.
-* **Solución aplicada**:
-  - **Motor C++ Nativo (CUDA 12.4)**: Compilado para arquitecturas modernas con soporte AVX2 y núcleos Tensor.
-  - **Flash Attention**: Reduce hasta un 40% el consumo de VRAM en la atención contextual.
-  - **Control Inteligente de Capas (`n_gpu_layers`)**: El entorno te permite asignar exactamente las capas que caben en tus 6 GB de VRAM (por ejemplo, 33 capas para modelos 7B/8B o 100% para modelos 3B) evitando el desbordamiento.
-  - **Cuantización de KV Cache (`q8_0`)**: Reduce a la mitad el consumo de memoria del historial del chat.
-  - **Hilos Físicos de CPU**: Optimizado para 6 hilos reales de tu AMD Ryzen, eliminando la penalización de latencia del SMT/HyperThreading.
-
-### 2. ¿Por qué el modelo se cortaba a la mitad y no terminaba de escribir?
-* **Causa principal**: La gran mayoría de interfaces genéricas tienen fijado un `max_tokens` (o `n_predict`) muy bajo por defecto (ej. 256 o 512 tokens), cortando abruptamente respuestas largas, explicaciones de código o tablas.
-* **Solución aplicada**:
-  - **Límite Extendido de Salida**: Selector de 4,096 a 8,192 tokens de salida continuos.
-  - **Ventana de Contexto Amplia**: Soporte de 8,192 a 16,384 tokens con preservación de contexto.
-  - **Botón Inteligente "Continuar escribiendo"**: Si una respuesta extremadamente larga alcanza el límite, aparece automáticamente un banner y botón para que el modelo siga redactando desde la última palabra sin reiniciar la conversación.
+</div>
 
 ---
 
-## 🚀 Cómo Iniciar el Entorno
+## Características principales
 
-### Opción 1 (Recomendada - 1 Clic):
-Haz doble clic sobre el archivo:
-```
-INICIAR_HACKINGLLM.bat
-```
-El servidor arrancará e inmediatamente se abrirá tu navegador web con la interfaz gráfica en:
-`http://127.0.0.1:7860`
+- **Editor IDE completo**: Monaco Editor con pestañas, árbol de archivos, terminal integrada, compilador y vista previa web en vivo.
+- **Agente Autónomo (`Crear Apps`)**:
+  - Planificación estructurada con gramática **GBNF** (`json_schema`) adaptada al tipo de app (**Single HTML**, **Web Estática**, **Full-Stack** o **Python**).
+  - **Codebase Vector RAG** + **Code GraphRAG** + verificación multi-compuerta **Reflexion** (AST, imports, ejecución real, integridad HTML/DOM y `node --check`).
+  - **Herramientas MCP** con *Tool Masking* por intención y *Few-Shot* dinámico (`read_file`, `write_file`, `apply_patch`, `search_web`, `download_url`, `compile_project`, etc.).
+  - **Descargador universal de archivos públicos**: busca y descarga `.glb`/`.gltf` (Khronos), imágenes (Wikimedia), papers (arXiv), videos/audio/datasets (Internet Archive) y repositorios GitHub directamente a tu proyecto.
+- **Chat Normal independiente (`Pregunta Normal`)**: hilo separado con pestañas múltiples, historial persistente en `localStorage` y vista dedicada en pestaña completa (`/static/chat.html`).
+- **Gestor de Modelos estilo LM Studio**: cambia entre tus `.gguf` locales en 1 clic, busca y descarga nuevos modelos directamente desde **Hugging Face Hub**, con auto-ajuste dinámico de capas GPU, soporte **MoE** (`-ot`) y **Speculative Decoding** automático (`--model-draft`).
+- **Privacidad y modo híbrido**: 100% local en tu GPU/CPU, con toggles opcionales para búsqueda web en vivo, **Proxy / Tor (SOCKS5)** y **Cloud Workers**.
 
-### Opción 2 (Por consola):
-```powershell
+---
+
+## Instalación rápida (3 pasos)
+
+Los binarios pesados de `llama.cpp` (`engine/`) y los modelos `.gguf` (`models/`) se omiten del repositorio para mantenerlo ligero; **`setup.py` descarga todo automáticamente** según tu hardware (GPU NVIDIA CUDA 12.4 o CPU):
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/TU_USUARIO/LLMAgent.git
+cd LLMAgent
+
+# 2. Instalar dependencias, motor llama.cpp y modelo GGUF inicial
+python setup.py
+
+# 3. Iniciar la aplicación (abre http://127.0.0.1:7860 automáticamente)
 python run.py
 ```
 
+### Opciones de `setup.py`
+
+| Comando | Descripción |
+| :--- | :--- |
+| `python setup.py` | Instala `requirements.txt`, detecta GPU/CPU, descarga `llama.cpp` y baja `Qwen 2.5 Coder 7B (4.68 GB)` |
+| `python setup.py --model llama-3.2-3b` | Instala con `Llama 3.2 3B (2.02 GB)` — ideal para PCs ligeras |
+| `python setup.py --model qwen3-8b` | Instala con `Qwen 3 8B IQ4_XS (4.28 GB)` — cabe 100% en 6 GB VRAM |
+| `python setup.py --model qwen2.5-coder-14b` | Instala con `Qwen 2.5 Coder 14B (7.56 GB)` — alta calidad en modo híbrido GPU+RAM |
+| `python setup.py --no-model` | Solo instala dependencias y motor; descarga modelos después desde el botón **Modelos** en la UI |
+| `python setup.py --cpu` | Fuerza la descarga de binarios CPU (sin CUDA) |
+
 ---
 
-## 📁 Dónde Colocar tus Archivos GGUF
+## Arquitectura del proyecto
 
-1. Puedes arrastrar o copiar tus archivos `.gguf` dentro de la carpeta:
-   `c:\Users\luigu\OneDrive\Escritorio\HackingLLM\models\`
-2. O en la interfaz gráfica, pulsa el botón **"Explorar en PC..."** para seleccionar cualquier archivo `.gguf` que tengas en tu disco duro (Descargas, Documentos, etc.).
+```mermaid
+flowchart LR
+    UI["Frontend (Monaco IDE + Chat Normal)"] --> API["server.py (FastAPI + SSE)"]
+    API --> CODEX["core/local_codex_engine.py (Blueprint GBNF + Reflexion)"]
+    API --> MCP["core/mcp_agent_engine.py (Tools + Universal Downloader)"]
+    API --> RAG["core/codebase_rag.py (AST Vector RAG + Code Graph)"]
+    API --> WORK["core/cloud_workers.py (Contratos + Orquestador)"]
+    API --> LLM["utils/engine_runner.py -> engine/llama-server (GGUF)"]
+```
+
+### Estructura de carpetas
+
+```text
+LLMAgent/
+├── run.py                      # Lanzador principal (http://127.0.0.1:7860)
+├── setup.py                    # Instalador 1-clic (pip + llama.cpp + modelo GGUF)
+├── server.py                   # Backend FastAPI, SSE, API de workspace y Hub de Modelos
+├── requirements.txt            # Dependencias Python
+├── Dockerfile                  # Contenedor opcional
+├── core/                       # Motores principales del agente
+│   ├── cloud_workers.py        # Generadores local/nube y extracción de contratos HTML/CSS/JS/PY
+│   ├── codebase_rag.py         # Indexación vectorial AST y Code GraphRAG
+│   ├── cybersecurity_kg.py     # Grafo de conocimiento técnico
+│   ├── local_codex_engine.py   # Clasificador de arquetipos, GBNF y verificación Reflexion
+│   ├── mcp_agent_engine.py     # Herramientas MCP, búsqueda web y descarga en streaming
+│   └── terminal_engine.py      # Terminal integrada y auditoría de dependencias
+├── utils/                      # Utilidades compartidas
+│   ├── engine_runner.py        # Cargador ctypes de llama-server-impl.dll
+│   └── net_utils.py            # Descargas SSL-safe con progreso y reanudación
+├── scripts/
+│   └── download_model.py       # Descargador CLI interactivo de modelos GGUF
+├── static/                     # Interfaz web (IDE + Chat Normal + Splash)
+├── engine/                     # Binarios de llama.cpp (generado por setup.py)
+└── models/                     # Modelos .gguf locales (generado por setup.py o la UI)
+```
 
 ---
 
-## 🎯 Modelos GGUF Recomendados para tu RTX 4050 (6GB)
+## Requisitos recomendados
 
-| Modelo | Cuantización | Tamaño | VRAM Usada | Velocidad Estimada | Especialidad |
-|---|---|---|---|---|---|
-| **Llama-3.2-3B-Instruct** | Q4_K_M | ~2.0 GB | ~2.6 GB (100% GPU) | **75 - 95 tokens/s** | Respuestas ultrarrápidas, tareas generales |
-| **Phi-3.5-mini-instruct** | Q4_K_M | ~2.4 GB | ~3.0 GB (100% GPU) | **70 - 85 tokens/s** | Lógica, matemáticas, resúmenes |
-| **Qwen2.5-Coder-7B-Instruct** | Q4_K_M | ~4.7 GB | ~5.2 GB (28-30 capas) | **40 - 55 tokens/s** | Programación, scripts, depuración |
-| **DeepSeek-R1-Distill-Qwen-8B** | Q4_K_M | ~4.9 GB | ~5.3 GB (28 capas) | **35 - 50 tokens/s** | Razonamiento paso a paso, análisis complejo |
+- **Python**: 3.10 o superior
+- **GPU (recomendado)**: NVIDIA con **6 GB+ VRAM** (CUDA 12.4) — también funciona en **CPU** automáticamente
+- **RAM**: 16 GB recomendados (para modelos 7B–8B en GPU o 12B–14B en modo híbrido)
+- **Node.js** *(opcional)*: habilita la verificación automática de sintaxis JS (`node --check`) en el bucle Reflexion
 
-> 💡 **Para descargar cualquiera de estos modelos automáticamente**: Ejecuta `python download_model.py` y elige la opción que prefieras.
+---
 
+## Licencia
+
+Uso libre para desarrollo y aprendizaje local.

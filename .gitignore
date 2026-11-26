@@ -1,0 +1,30 @@
+# Binarios pesados y modelos GGUF (se descargan automáticamente con `python setup.py`)
+engine/*
+!engine/.gitkeep
+models/*
+!models/.gitkeep
+
+# Secretos, configuraciones locales y estado del usuario
+.antigravity_cloud.json
+.antigravity_proxy.json
+.antigravity_workspace
+.antigravity_rag/
+.audit/
+.kombai/
+.env
+*.env
+
+# Python / caché / entornos virtuales
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Temporales y descargas parciales
+*.part
+*.log
+.DS_Store
+Thumbs.db
