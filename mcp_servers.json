@@ -1,0 +1,39 @@
+{
+  "mcpServers": {
+    "mcp_arch": {
+      "command": "python",
+      "args": ["mcp_servers/mcp_arch.py"],
+      "enabled": true
+    },
+    "mcp_ast": {
+      "command": "python",
+      "args": ["mcp_servers/mcp_ast.py"],
+      "enabled": true
+    },
+    "mcp_assets": {
+      "command": "python",
+      "args": ["mcp_servers/mcp_assets.py"],
+      "enabled": true
+    },
+    "mcp_exec": {
+      "command": "python",
+      "args": ["mcp_servers/mcp_exec.py"],
+      "enabled": true
+    },
+    "mcp_runtime_vision": {
+      "command": "python",
+      "args": ["mcp_servers/mcp_runtime_vision.py"],
+      "enabled": true
+    },
+    "filesystem_official": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "enabled": false
+    },
+    "playwright_official": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "enabled": false
+    }
+  }
+}

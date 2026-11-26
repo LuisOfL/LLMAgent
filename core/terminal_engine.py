@@ -23,11 +23,15 @@ from typing import Dict, Any, List, Optional, Tuple
 DANGEROUS_HOST_PATTERNS = [
     r"(?i)\bformat\s+[a-z]:",
     r"(?i)\brm\s+-rf\s+/(?:\s|$|\*)",
-    r"(?i)\bdel\s+/[sqf]+\s+c:\\windows",
+    r"(?i)\bdel\s+/[sqf]+\s+c:\\",
     r"(?i)\brd\s+/s\s+/q\s+c:\\",
+    r"(?i)\brmdir\s+/s\s+/q\s+c:\\",
+    r"(?i)\bremove-item\b[^\r\n]*-recurse[^\r\n]*c:\\",
     r"(?i)\breg\s+delete\s+hklm\\",
     r"(?i)\bbcdedit\b",
     r"(?i)\bdiskpart\b",
+    r"(?i)\bshutdown\s+/[sr]",
+    r"(?i)\bpowershell\b[^\r\n]*-enc(?:odedcommand)?\b",
     r"(?i)\bcipher\s+/w:c:"
 ]
 

@@ -52,6 +52,25 @@ def open_browser():
     webbrowser.open(url)
 
 
+def cleanup_local_engine_processes():
+    """Cierra cualquier llama-server.exe lanzado desde esta carpeta para que nunca bloquee archivos al salir."""
+    try:
+        import psutil
+        base_str = str(Path(__file__).resolve().parent).lower()
+        for proc in psutil.process_iter(["name", "exe", "cmdline"]):
+            try:
+                name = (proc.info.get("name") or "").lower()
+                exe = (proc.info.get("exe") or "").lower()
+                cmd = " ".join(proc.info.get("cmdline") or []).lower()
+                if "llama-server" in name and (base_str in exe or base_str in cmd):
+                    proc.terminate()
+                    proc.wait(timeout=3)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 65)
     print("      LLMAGENT - ENTORNO GGUF & AGENTES SOTA")
@@ -65,4 +84,7 @@ if __name__ == "__main__":
 
     print("[*] Iniciando servidor de inferencia y telemetría...")
     threading.Thread(target=open_browser, daemon=True).start()
-    uvicorn.run("server:app", host="127.0.0.1", port=7860, reload=False, log_level="warning")
+    try:
+        uvicorn.run("server:app", host="127.0.0.1", port=7860, reload=False, log_level="warning")
+    finally:
+        cleanup_local_engine_processes()

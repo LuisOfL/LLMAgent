@@ -78,7 +78,7 @@ def step_install_requirements():
 
 
 def _extract_zip_flat_to_engine(zip_path: Path):
-    """Extrae todos los binarios/DLLs de un zip de llama.cpp dentro de engine/."""
+    """Extrae todos los binarios/DLLs de un zip de llama.cpp dentro de engine/ con permisos normales de usuario."""
     with zipfile.ZipFile(zip_path, "r") as zf:
         for member in zf.infolist():
             if member.is_dir():
@@ -89,6 +89,35 @@ def _extract_zip_flat_to_engine(zip_path: Path):
             target = ENGINE_DIR / fname
             with zf.open(member) as src, open(target, "wb") as dst:
                 shutil.copyfileobj(src, dst)
+            try:
+                os.chmod(target, 0o755 if fname.endswith((".exe", ".dll", ".so", ".dylib")) else 0o644)
+            except Exception:
+                pass
+
+
+def step_clean_installation():
+    """Detiene procesos locales de llama-server y limpia binarios, modelos y cachés para poder borrar la carpeta normalmente."""
+    print("\n=== Limpiando instalación local de LLMAgent ===")
+    if platform.system().lower().startswith("win"):
+        subprocess.run(["taskkill", "/F", "/IM", "llama-server.exe"], capture_output=True)
+    for rel in (".antigravity_rag", ".audit", "__pycache__", "core/__pycache__", "utils/__pycache__", "scripts/__pycache__"):
+        p = BASE_DIR / rel
+        if p.exists():
+            shutil.rmtree(p, ignore_errors=True)
+    for d in (ENGINE_DIR, MODELS_DIR):
+        if d.exists():
+            for item in d.iterdir():
+                if item.name == ".gitkeep":
+                    continue
+                try:
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                    else:
+                        os.chmod(item, 0o666)
+                        item.unlink()
+                except Exception:
+                    pass
+    print("[OK] Procesos detenidos y archivos temporales/binarios limpiados. Ya puedes borrar la carpeta desde el Explorador.")
 
 
 def step_install_llama_engine(force_mode: str = "auto"):
@@ -183,7 +212,12 @@ def main():
     parser.add_argument("--cuda", action="store_true", help="Forzar descarga del motor llama.cpp con CUDA 12.4.")
     parser.add_argument("--model", choices=list(STARTER_MODELS.keys()), default="qwen2.5-coder-7b", help="Modelo GGUF inicial a descargar.")
     parser.add_argument("--no-model", action="store_true", help="No descargar modelo ahora (se puede descargar desde la UI).")
+    parser.add_argument("--clean", action="store_true", help="Detiene llama-server y limpia engine/, models/ y cachés para desinstalar.")
     args = parser.parse_args()
+
+    if args.clean:
+        step_clean_installation()
+        return
 
     print("=" * 68)
     print("  LLMAGENT — INSTALADOR AUTOMÁTICO PARA GITHUB")

@@ -703,7 +703,7 @@ def reflexion_verify_and_heal_project(
                 f"importlib.import_module({repr(mod_n)})"
             )
             try:
-                env_p = os.environ.copy()
+                env_p = {k: v for k, v in os.environ.items() if not any(s in k.upper() for s in ("SECRET", "API_KEY", "TOKEN", "PASSWORD", "AWS_"))}
                 env_p["PYTHONIOENCODING"] = "utf-8"
                 res = subprocess.run(
                     [sys.executable, "-X", "utf8", "-c", probe],

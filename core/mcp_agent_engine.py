@@ -24,6 +24,7 @@ from core.codebase_rag import codebase_rag_store, code_arch_graph
 from core.cybersecurity_kg import dynamic_cyber_graph, get_cybersecurity_graph_context
 from core.terminal_engine import terminal_engine
 from core.cloud_workers import audit_logger, auto_fix_common_python_issues
+from core.mcp_client import mcp_client_manager
 
 
 # ==============================================================================
@@ -330,10 +331,30 @@ def _get_active_proxy_url(url: str) -> Optional[str]:
     return None
 
 
+_PUBLIC_ASSET_HOSTS = (
+    "raw.githubusercontent.com",
+    "github.com",
+    "archive.org",
+    "commons.wikimedia.org",
+    "upload.wikimedia.org",
+    "arxiv.org",
+    "export.arxiv.org",
+    "huggingface.co",
+)
+
+
+def _is_public_asset_url(url: str) -> bool:
+    try:
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+        return any(host == h or host.endswith("." + h) for h in _PUBLIC_ASSET_HOSTS)
+    except Exception:
+        return False
+
+
 def _fetch_url_bytes(url: str, timeout: float = 30.0) -> Tuple[int, bytes, str]:
-    """Descarga bytes de una URL respetando el proxy anónimo Tor y resolviendo errores de certificados SSL en Windows."""
+    """Descarga bytes de una URL mediante HTTPS directo con reintentos (sin forzar Tor en assets públicos)."""
     import ssl
-    proxy_url = _get_active_proxy_url(url)
+    proxy_url = None if _is_public_asset_url(url) else _get_active_proxy_url(url)
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     headers = {"User-Agent": ua}
     if proxy_url:
@@ -526,7 +547,7 @@ def _stream_download_to_file(
     soportando SSL en Windows, proxy Tor, Content-Disposition, detección de MIME y validación de cabeceras.
     """
     import ssl
-    proxy_url = _get_active_proxy_url(url)
+    proxy_url = None if _is_public_asset_url(url) else _get_active_proxy_url(url)
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     headers = {"User-Agent": ua}
     bin_exts = {
@@ -866,9 +887,9 @@ def _find_verified_download_urls(query: str, target_ext: str = "", max_results: 
 
 
 def get_openai_compatible_tools(allowed_names: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-    """Convierte el catálogo MCP al esquema nativo de Function Calling de OpenAI / Qwen / llama-server."""
+    """Convierte las herramientas internas + herramientas descubiertas en servidores MCP externos (JSON-RPC 2.0)."""
     allowed_set = set(allowed_names) if allowed_names else None
-    return [
+    builtin = [
         {
             "type": "function",
             "function": {
@@ -880,6 +901,9 @@ def get_openai_compatible_tools(allowed_names: Optional[List[str]] = None) -> Li
         for t in MCP_TOOLS_CATALOG
         if allowed_set is None or t["name"] in allowed_set
     ]
+    # Incorporar herramientas reales descubiertas por el cliente MCP (stdio / HTTP)
+    external = mcp_client_manager.list_external_openai_tools()
+    return builtin + external
 
 
 def classify_tool_profile(user_query: str) -> str:
@@ -988,6 +1012,8 @@ class MCPServerEngine:
         }
 
     def execute_tool(self, tool_name: str, arguments: Dict[str, Any], workspace_dir: Path) -> Dict[str, Any]:
+        if mcp_client_manager.is_external_tool(tool_name):
+            return mcp_client_manager.call_external_tool(tool_name, arguments or {})
         t0 = time.time()
         ws = workspace_dir.resolve()
         try:

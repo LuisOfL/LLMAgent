@@ -46,6 +46,8 @@ from core.mcp_agent_engine import (
     get_openai_compatible_tools_for_task, get_dynamic_agent_few_shots,
     get_bedrock_converse_tools, run_autonomous_react_pre_step, parse_tool_calls_from_text
 )
+from core.mcp_client import mcp_client_manager
+from core.mcp_orchestrator import run_elite_mcp_pipeline
 from core.local_codex_engine import (
     classify_agent_intent,
     plan_blueprint_constrained,
@@ -397,6 +399,24 @@ def list_mcp_tools_endpoint():
         "openai_qwen_schema": get_openai_compatible_tools(),
         "bedrock_converse_schema": get_bedrock_converse_tools()
     }
+
+@app.get("/api/mcp/servers")
+def list_external_mcp_servers():
+    """Devuelve el estado de los servidores MCP externos reales (JSON-RPC 2.0 sobre stdio/HTTP)."""
+    return {
+        "protocol": "Model Context Protocol (JSON-RPC 2.0 / 2024-11-05)",
+        "config_file": str(mcp_client_manager.config_path),
+        "servers": mcp_client_manager.get_status(),
+        "external_tools": mcp_client_manager.list_external_openai_tools(),
+    }
+
+
+@app.post("/api/mcp/servers/reload")
+def reload_external_mcp_servers():
+    """Recarga y reconecta los servidores externos configurados en mcp_servers.json."""
+    status = mcp_client_manager.reload_servers()
+    return {"success": True, "servers": status}
+
 
 @app.post("/api/mcp/call")
 def call_mcp_tool_endpoint(req: MCPDirectCallRequest):
@@ -1207,14 +1227,15 @@ def get_system_metrics() -> Dict[str, Any]:
     }
 
 def find_llama_server_binary() -> Optional[Path]:
-    """Busca el runner de python o el binario de llama-server."""
-    runner = BASE_DIR / "utils" / "engine_runner.py"
-    if runner.exists():
-        return runner
-    if not ENGINE_DIR.exists():
-        return None
-    for p in ENGINE_DIR.rglob("llama-server.exe"):
-        return p
+    """Busca el binario oficial llama-server.exe (o llama-server en Linux/macOS) dentro de engine/."""
+    if ENGINE_DIR.exists():
+        for bin_name in ("llama-server.exe", "llama-server"):
+            direct = ENGINE_DIR / bin_name
+            if direct.exists() and direct.is_file():
+                return direct
+            for p in ENGINE_DIR.rglob(bin_name):
+                if p.is_file():
+                    return p
     return None
 
 def _is_moe_model_name(model_path: Optional[Path]) -> bool:
@@ -1273,6 +1294,10 @@ def compute_optimal_hardware_profile(model_path: Optional[Path] = None, has_mmpr
     mmproj_reserve_mb = 950.0 if has_mmproj else 0.0
     is_moe = _is_moe_model_name(model_path)
 
+    ram_total_gb = float(sys_m.get("ram_total_gb") or 16.0)
+    ram_free_gb = max(0.0, ram_total_gb - float(sys_m.get("ram_used_gb") or 0.0))
+    ram_warning = ""
+
     if gpu.get("has_gpu"):
         total_vram = float(gpu.get("total_mb") or 0)
         free_vram = float(gpu.get("free_mb") or 0)
@@ -1280,8 +1305,18 @@ def compute_optimal_hardware_profile(model_path: Optional[Path] = None, has_mmpr
         ctx_opt = 16384
         extra_ot: Optional[str] = None
 
-        if is_moe:
-            # Modelos MoE (ej. Qwen3-30B-A3B): atención 100% en GPU y expertos FFN dispersos en RAM
+        # Guardrail realista de RAM para modelos grandes / MoE (evitar prometer 30B-A3B en 16 GB RAM)
+        total_mem_budget_mb = (ram_total_gb * 1024.0 * 0.72) + (total_vram * 0.85)
+        if model_mb > total_mem_budget_mb:
+            ram_warning = (
+                f"Advertencia: este modelo ({model_mb/1024:.1f} GB) excede el presupuesto seguro de VRAM+RAM "
+                f"({ram_total_gb:.0f} GB RAM + {total_vram/1024:.0f} GB VRAM) y puede caer en swap de disco. "
+                "Para modelos MoE 30B se recomiendan >= 24–32 GB de RAM."
+            )
+            print(f"[HardwareGuard] {ram_warning}")
+
+        if is_moe and ram_total_gb >= 24.0:
+            # Modelos MoE (ej. Qwen3-30B-A3B) SOLO cuando hay >=24 GB de RAM física para evitar swap
             ngl = 99
             cache_k, cache_v = "q4_0", "q4_0"
             batch_size, ubatch_size = 1024, 512
@@ -1417,13 +1452,32 @@ def _auto_load_default_model():
     except Exception:
         pass
 
+import atexit
+import signal
+
+
+def _cleanup_child_processes(*_args):
+    try:
+        mcp_client_manager.close_all()
+    except Exception:
+        pass
+    try:
+        stop_llama_server()
+    except Exception:
+        pass
+
+
+atexit.register(_cleanup_child_processes)
+
+
 @app.on_event("startup")
 def on_startup():
     threading.Thread(target=_auto_load_default_model, daemon=True).start()
+    threading.Thread(target=mcp_client_manager.reload_servers, daemon=True).start()
 
 @app.on_event("shutdown")
 def on_shutdown():
-    stop_llama_server()
+    _cleanup_child_processes()
 
 @app.get("/api/status")
 def get_status():
@@ -1956,15 +2010,21 @@ def load_model(req: LoadModelRequest):
     cache_v = req.cache_type_v or hw_profile["cache_type_v"]
     use_flash_attn = hw_profile["flash_attn"] if req.flash_attn is None else req.flash_attn
 
-    # Lanzar a través del intérprete de Python (engine_runner.py) para evadir las restricciones de Device Guard / SAC de Windows
-    if server_runner.exists():
+    # Preferir el binario oficial llama-server.exe como subproceso aislado por HTTP local (más estable entre versiones)
+    # y usar utils/engine_runner.py únicamente si existe llama-server-impl.dll y falta el ejecutable.
+    if server_exe and server_exe.exists():
+        cmd = [str(server_exe)]
+    elif server_runner.exists() and (ENGINE_DIR / "llama-server-impl.dll").exists():
         cmd = [
             sys.executable,
             "-u",
             str(server_runner)
         ]
     else:
-        cmd = [str(server_exe)]
+        raise HTTPException(
+            status_code=500,
+            detail="No se encontró engine/llama-server.exe. Ejecuta `python setup.py` para descargar el motor llama.cpp."
+        )
 
     cmd.extend([
         "--model", str(model_path),
@@ -2828,9 +2888,58 @@ async def chat_proxy(chat_req: ChatCompletionRequest):
                 return
 
             # =========================================================================
-            # ARQUITECTURA ORQUESTADA (CLOUD ON: BEDROCK/GEMINI | CLOUD OFF: 100% LOCAL)
+            # ORQUESTADOR CENTRAL DE ÉLITE (MÁQUINA DE ESTADOS + 5 SERVIDORES MCP)
+            # PLAN (MCP-ARCH) -> ASSETS (MCP-ASSETS) -> BUILD (CircuitBreaker + MCP-AST)
+            # -> QA_STATIC (MCP-EXEC) -> QA_VIS (MCP-RUNTIME-VISION) -> MONACO + PREVIEW
             # =========================================================================
             if (orchestrate_cloud or orchestrate_local) and last_user_text:
+                final_files: List[str] = []
+                for ev in run_elite_mcp_pipeline(
+                    user_query=last_user_text,
+                    workspace_dir=workspace.current_dir,
+                    cloud_cfg=cloud_cfg,
+                    use_cloud=orchestrate_cloud,
+                    local_port=state.port,
+                    max_qa_rounds=3,
+                    is_aborted=lambda: state.abort_requested,
+                ):
+                    if state.abort_requested:
+                        break
+                    ev_type = ev.get("type")
+                    if ev_type == "step":
+                        yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': ev['id'], 'status': ev['status'], 'title': ev['title'], 'detail': ev.get('detail', '')})}\n\n"
+                    elif ev_type == "file_code":
+                        f_p = ev["path"]
+                        f_c = ev["code"]
+                        if f_p not in final_files:
+                            final_files.append(f_p)
+                        prefix = f"\n> 🔧 **[Auto-Reparación QA aplicada a `{f_p}`]**\n" if ev.get("healed") else ""
+                        block = f"{prefix}```file:{f_p}\n{f_c}\n```\n\n"
+                        for chunk in _chunk_text(block, 180):
+                            if state.abort_requested:
+                                break
+                            token_count += max(1, len(chunk) // 4)
+                            yield f"data: {json.dumps({'choices': [{'delta': {'content': chunk}}]})}\n\n"
+                            time.sleep(0.004)
+                        yield f"data: {json.dumps({'type': 'mcp_tool_event', 'tools': [{'tool': 'write_file', 'summary': f'MCP-AST escribió {f_p}'}], 'workspace_changed': True})}\n\n"
+                    elif ev_type == "done":
+                        yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'project_complete', 'status': 'done', 'title': f'Entrega lista en Monaco + Preview ({len(final_files)} archivo(s))', 'detail': ev.get('summary', '')})}\n\n"
+
+                total_time = max(time.time() - start_t, 0.001)
+                speed = round(token_count / total_time, 2)
+                meta_event = {
+                    "type": "meta",
+                    "tokens": token_count,
+                    "total_time_s": round(total_time, 2),
+                    "tokens_per_sec": speed,
+                    "ttft_ms": 120,
+                    "finish_reason": "stop"
+                }
+                yield f"data: {json.dumps(meta_event)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            if False and (orchestrate_cloud or orchestrate_local) and last_user_text:
                 yield f"data: {json.dumps({'type': 'orchestrator_step', 'id': 'plan_start', 'status': 'running', 'title': 'Cerebro Local Codex (GBNF JSON Schema): Diseñando arquitectura por capas...', 'detail': 'Decodificación gramatical estricta de módulos, contratos AST y dependencias topológicas'})}\n\n"
 
                 # Paso 1: Blueprint Arquitectónico con Decodificación Restringida GBNF JSON Schema
